@@ -26,7 +26,13 @@ import net.micode.notes.data.Notes.NoteColumns;
 import net.micode.notes.tool.DataUtils;
 
 
+/**
+ * 便签列表单项视图数据模型类。
+ * 负责从 note 表查询游标单行提取便签或文件夹的展示属性，自动清理清单模式标记符，
+ * 对通话便签关联查询电话号码与通讯录联系人姓名，并计算该项在列表中的首/中/末/紧随文件夹位置状态。
+ */
 public class NoteItemData {
+    // 便签主列表查询 note 表时使用的 12 列字段投影数组及下方对应的游标列索引常量
     static final String [] PROJECTION = new String [] {
         NoteColumns.ID,
         NoteColumns.ALERTED_DATE,
@@ -70,12 +76,19 @@ public class NoteItemData {
     private String mName;
     private String mPhoneNumber;
 
+    // 列表项相对位置状态标志（末项、首项、唯一项、文件夹后唯一便签、文件夹后首条多便签），用于选择圆角拼接背景
     private boolean mIsLastItem;
     private boolean mIsFirstItem;
     private boolean mIsOnlyOneItem;
     private boolean mIsOneNoteFollowingFolder;
     private boolean mIsMultiNotesFollowingFolder;
 
+    /**
+     * 从当前游标行构造列表项数据对象：解析基本属性、去除清单勾选标签、解析通话联系人，并计算位置标志。
+     *
+     * @param context 上下文对象
+     * @param cursor  指向当前列表项记录的 Cursor 游标
+     */
     public NoteItemData(Context context, Cursor cursor) {
         mId = cursor.getLong(ID_COLUMN);
         mAlertDate = cursor.getLong(ALERTED_DATE_COLUMN);
@@ -93,6 +106,7 @@ public class NoteItemData {
         mWidgetType = cursor.getInt(WIDGET_TYPE_COLUMN);
 
         mPhoneNumber = "";
+        // 若属于通话便签目录，进一步查出电话号码并尝试匹配系统通讯录姓名（未匹配则直接显示号码）
         if (mParentId == Notes.ID_CALL_RECORD_FOLDER) {
             mPhoneNumber = DataUtils.getCallNumberByNoteId(context.getContentResolver(), mId);
             if (!TextUtils.isEmpty(mPhoneNumber)) {
@@ -109,6 +123,9 @@ public class NoteItemData {
         checkPostion(cursor);
     }
 
+    /**
+     * 检查当前记录在 Cursor 中的前后相邻关系，判断其是否为首项、末项、独立单项或紧跟在文件夹后的第一条便签。
+     */
     private void checkPostion(Cursor cursor) {
         mIsLastItem = cursor.isLast() ? true : false;
         mIsFirstItem = cursor.isFirst() ? true : false;
@@ -134,90 +151,112 @@ public class NoteItemData {
         }
     }
 
+    // 是否为排在文件夹后面的唯一一条便签
     public boolean isOneFollowingFolder() {
         return mIsOneNoteFollowingFolder;
     }
 
+    // 是否为排在文件夹后面的多条便签中的第一条
     public boolean isMultiFollowingFolder() {
         return mIsMultiNotesFollowingFolder;
     }
 
+    // 是否为整个列表的最后一项
     public boolean isLast() {
         return mIsLastItem;
     }
 
+    // 获取通话便签显示的联系人姓名（或电话号码）
     public String getCallName() {
         return mName;
     }
 
+    // 是否为整个列表的第一项
     public boolean isFirst() {
         return mIsFirstItem;
     }
 
+    // 是否为整个列表中的唯一一项
     public boolean isSingle() {
         return mIsOnlyOneItem;
     }
 
+    // 获取记录主键 ID
     public long getId() {
         return mId;
     }
 
+    // 获取定时提醒时间戳
     public long getAlertDate() {
         return mAlertDate;
     }
 
+    // 获取创建时间戳
     public long getCreatedDate() {
         return mCreatedDate;
     }
 
+    // 是否包含附件
     public boolean hasAttachment() {
         return mHasAttachment;
     }
 
+    // 获取最后修改时间戳
     public long getModifiedDate() {
         return mModifiedDate;
     }
 
+    // 获取便签背景颜色编号
     public int getBgColorId() {
         return mBgColorId;
     }
 
+    // 获取父文件夹 ID
     public long getParentId() {
         return mParentId;
     }
 
+    // 获取文件夹内包含的便签数量
     public int getNotesCount() {
         return mNotesCount;
     }
 
+    // 获取所属文件夹 ID（同 getParentId）
     public long getFolderId () {
         return mParentId;
     }
 
+    // 获取节点类型（便签/文件夹/系统目录）
     public int getType() {
         return mType;
     }
 
+    // 获取关联的桌面小部件尺寸类型
     public int getWidgetType() {
         return mWidgetType;
     }
 
+    // 获取关联的桌面小部件实例 ID
     public int getWidgetId() {
         return mWidgetId;
     }
 
+    // 获取去除清单标记后的便签摘要或文件夹名
     public String getSnippet() {
         return mSnippet;
     }
 
+    // 判断该便签是否设置了有效闹钟提醒
     public boolean hasAlert() {
         return (mAlertDate > 0);
     }
 
+    // 判断该记录是否为有效的通话便签记录
     public boolean isCallRecord() {
         return (mParentId == Notes.ID_CALL_RECORD_FOLDER && !TextUtils.isEmpty(mPhoneNumber));
     }
 
+    // 静态工具方法：直接从游标当前行读取节点类型列
     public static int getNoteType(Cursor cursor) {
         return cursor.getInt(TYPE_COLUMN);
     }
