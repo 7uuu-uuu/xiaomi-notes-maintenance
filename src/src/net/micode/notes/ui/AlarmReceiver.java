@@ -20,8 +20,18 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+/**
+ * 便签定时闹钟到点广播接收器，继承自 BroadcastReceiver（运行于 :remote 独立进程）。
+ * 接收由 AlarmManager 在预设提醒时刻触发的广播，并将携带便签 URI 的 Intent 转发启动 AlarmAlertActivity。
+ */
 public class AlarmReceiver extends BroadcastReceiver {
     @Override
+    /**
+     * 闹钟触发回调：重定向目标组件为 AlarmAlertActivity，附加 NEW_TASK 栈标志后启动响铃弹窗界面。
+     *
+     * @param context 广播上下文
+     * @param intent  包含待提醒便签 Content URI 的广播 Intent
+     */
     public void onReceive(Context context, Intent intent) {
         intent.setClass(context, AlarmAlertActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
