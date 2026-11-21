@@ -48,7 +48,13 @@ import net.micode.notes.data.Notes.NoteColumns;
 import net.micode.notes.gtask.remote.GTaskSyncService;
 
 
+/**
+ * 小米便签系统设置与云同步账号管理界面类，继承自 Android PreferenceActivity。
+ * 提供“新建便签背景颜色随机”开关偏好，支持查询、绑定、切换、移除以及跳转系统新增 Google 同步账号，
+ * 提供“立即同步 / 取消同步”操作按钮，并通过动态注册 GTaskReceiver 广播接收器实时刷新同步进度与上次同步时间。
+ */
 public class NotesPreferenceActivity extends PreferenceActivity {
+    // 持久化存储同步配置的 SharedPreferences 文件名及账号名、上次同步时间、随机背景色等键名常量
     public static final String PREFERENCE_NAME = "notes_preferences";
 
     public static final String PREFERENCE_SYNC_ACCOUNT_NAME = "pref_key_account_name";
@@ -61,15 +67,22 @@ public class NotesPreferenceActivity extends PreferenceActivity {
 
     private static final String AUTHORITIES_FILTER_KEY = "authorities";
 
+    // 承载 Google 同步账号设置项的 PreferenceCategory 分组容器
     private PreferenceCategory mAccountCategory;
 
+    // 监听后台 GTaskSyncService 同步状态与进度广播的接收器
     private GTaskReceiver mReceiver;
 
+    // 跳转系统添加账号前记录的原有 Google 账号数组，用于返回后识别新账号
     private Account[] mOriAccounts;
 
+    // 标记用户是否刚刚点击了“添加账号”跳转到系统账户设置页
     private boolean mHasAddedAccount;
 
     @Override
+    /**
+     * 界面创建回调：启用 ActionBar 返回图标、加载 preferences.xml 偏好项、注册同步广播接收器并添加顶部同步按钮视图。
+     */
     protected void onCreate(Bundle icicle) {
         super.onCreate(icicle);
 
@@ -89,6 +102,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
     }
 
     @Override
+    /**
+     * 界面恢复可见回调：若用户刚从系统添加账号页返回，自动对比检测新增的 Google 账号并设为默认同步账号，随后刷新 UI。
+     */
     protected void onResume() {
         super.onResume();
 
@@ -117,6 +133,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
     }
 
     @Override
+    /**
+     * 界面销毁回调：注销动态注册的 GTaskReceiver 广播接收器，防止内存泄漏。
+     */
     protected void onDestroy() {
         if (mReceiver != null) {
             unregisterReceiver(mReceiver);
@@ -124,6 +143,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         super.onDestroy();
     }
 
+    /**
+     * 动态构建并刷新“同步账号”设置项：未同步时点击可根据是否已配置账号弹出选择框或更换/删除确认框。
+     */
     private void loadAccountPreference() {
         mAccountCategory.removeAll();
 
@@ -154,6 +176,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         mAccountCategory.addPreference(accountPref);
     }
 
+    /**
+     * 刷新“立即同步 / 取消同步”按钮状态（仅配置了账号时可用）及下方的实时同步进度或上次同步时间文本。
+     */
     private void loadSyncButton() {
         Button syncButton = (Button) findViewById(R.id.preference_sync_button);
         TextView lastSyncTimeView = (TextView) findViewById(R.id.prefenerece_sync_status_textview);
@@ -193,11 +218,17 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         }
     }
 
+    /**
+     * 统一刷新设置页的账号偏好项与同步控制按钮区域。
+     */
     private void refreshUI() {
         loadAccountPreference();
         loadSyncButton();
     }
 
+    /**
+     * 弹出 Google 同步账号单选列表对话框，列出设备已登录的所有 Google 账号，并在底部提供“添加账号”快捷入口。
+     */
     private void showSelectAccountAlertDialog() {
         AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(this);
 
@@ -254,6 +285,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         });
     }
 
+    /**
+     * 当已绑定同步账号时弹出风险提示操作菜单，提供“更换账号”、“删除账号”和“取消”三个选项。
+     */
     private void showChangeAccountConfirmAlertDialog() {
         AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(this);
 
@@ -283,11 +317,20 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         dialogBuilder.show();
     }
 
+    /**
+     * 通过系统 AccountManager 获取当前设备上已登录的所有 com.google 类型账号数组。
+     */
     private Account[] getGoogleAccounts() {
         AccountManager accountManager = AccountManager.get(this);
         return accountManager.getAccountsByType("com.google");
     }
 
+    /**
+     * 保存新的 Google 同步账号到 SharedPreferences，清空上次同步时间，
+     * 并启动后台线程将本地所有便签的 gtask_id 和 sync_id 重置为空，最后弹出设置成功提示。
+     *
+     * @param account 选定的 Google 账号邮箱名称
+     */
     private void setSyncAccount(String account) {
         if (!getSyncAccountName(this).equals(account)) {
             SharedPreferences settings = getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
@@ -318,6 +361,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         }
     }
 
+    /**
+     * 从 SharedPreferences 中移除当前绑定的同步账号与上次同步时间，并在后台线程清空数据库中的云同步关联字段。
+     */
     private void removeSyncAccount() {
         SharedPreferences settings = getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = settings.edit();
@@ -340,12 +386,18 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         }).start();
     }
 
+    /**
+     * 静态工具方法：读取当前已配置的 Google 同步账号名称（未配置时返回空字符串）。
+     */
     public static String getSyncAccountName(Context context) {
         SharedPreferences settings = context.getSharedPreferences(PREFERENCE_NAME,
                 Context.MODE_PRIVATE);
         return settings.getString(PREFERENCE_SYNC_ACCOUNT_NAME, "");
     }
 
+    /**
+     * 静态工具方法：持久化保存最近一次云同步成功完成的时间戳（毫秒）。
+     */
     public static void setLastSyncTime(Context context, long time) {
         SharedPreferences settings = context.getSharedPreferences(PREFERENCE_NAME,
                 Context.MODE_PRIVATE);
@@ -354,12 +406,18 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         editor.commit();
     }
 
+    /**
+     * 静态工具方法：读取最近一次云同步成功的时间戳（从未同步时返回 0）。
+     */
     public static long getLastSyncTime(Context context) {
         SharedPreferences settings = context.getSharedPreferences(PREFERENCE_NAME,
                 Context.MODE_PRIVATE);
         return settings.getLong(PREFERENCE_LAST_SYNC_TIME, 0);
     }
 
+    /**
+     * 内部广播接收器类：接收 GTaskSyncService 发出的同步状态变更广播，实时更新按钮状态与进度文案。
+     */
     private class GTaskReceiver extends BroadcastReceiver {
 
         @Override
@@ -374,6 +432,9 @@ public class NotesPreferenceActivity extends PreferenceActivity {
         }
     }
 
+    /**
+     * ActionBar 菜单点击回调：点击左上角应用图标（home）时以 CLEAR_TOP 模式返回便签主列表界面。
+     */
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
