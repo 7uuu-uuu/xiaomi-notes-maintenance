@@ -28,8 +28,14 @@ import net.micode.notes.data.Notes;
 import net.micode.notes.data.Notes.NoteColumns;
 
 
+/**
+ * 开机闹钟重新初始化广播接收器，继承自 BroadcastReceiver。
+ * 监听系统启动完成广播（ACTION_BOOT_COMPLETED）；由于 Android 关机重启后 AlarmManager 中的
+ * 定时任务会被清空，本类负责扫描数据库中所有尚未过期的便签提醒并重新向系统注册定时闹钟。
+ */
 public class AlarmInitReceiver extends BroadcastReceiver {
 
+    // 查询未过期提醒便签所需的字段投影（便签主键 ID 与闹钟提醒时间戳）及对应列索引
     private static final String [] PROJECTION = new String [] {
         NoteColumns.ID,
         NoteColumns.ALERTED_DATE
@@ -39,6 +45,13 @@ public class AlarmInitReceiver extends BroadcastReceiver {
     private static final int COLUMN_ALERTED_DATE      = 1;
 
     @Override
+    /**
+     * 接收到系统开机完成广播后回调：查询所有 alert_date 大于当前时间的普通便签，
+     * 逐条封装指向 AlarmReceiver 的 PendingIntent 并通过 AlarmManager.set(RTC_WAKEUP) 重新注册。
+     *
+     * @param context 广播上下文
+     * @param intent  接收到的开机广播 Intent
+     */
     public void onReceive(Context context, Intent intent) {
         long currentDate = System.currentTimeMillis();
         Cursor c = context.getContentResolver().query(Notes.CONTENT_NOTE_URI,

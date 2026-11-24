@@ -24,22 +24,38 @@ import net.micode.notes.data.Notes;
 import net.micode.notes.tool.ResourceParser;
 
 
+/**
+ * 4x4 尺寸桌面便签小部件提供者类，继承自抽象基类 NoteWidgetProvider。
+ * 负责响应 4x4 大尺寸小部件的更新广播，并提供 4x4 规格专属的布局、背景图片和类型常量。
+ */
 public class NoteWidgetProvider_4x extends NoteWidgetProvider {
     @Override
+    /**
+     * 响应系统桌面小部件更新请求，委托父类 update 方法刷新所有 4x4 小部件视图。
+     */
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         super.update(context, appWidgetManager, appWidgetIds);
     }
 
+    /**
+     * 返回 4x4 桌面小部件的布局资源 ID（R.layout.widget_4x）。
+     */
     protected int getLayoutId() {
         return R.layout.widget_4x;
     }
 
     @Override
+    /**
+     * 根据背景颜色编号返回 4x4 小部件对应的背景图片资源 ID。
+     */
     protected int getBgResourceId(int bgId) {
         return ResourceParser.WidgetBgResources.getWidget4xBgResource(bgId);
     }
 
     @Override
+    /**
+     * 返回 4x4 桌面小部件类型常量（Notes.TYPE_WIDGET_4X）。
+     */
     protected int getWidgetType() {
         return Notes.TYPE_WIDGET_4X;
     }

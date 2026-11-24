@@ -47,9 +47,16 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 清单模式（CheckList）专用的自定义便签文本编辑框控件，继承自 Android EditText。
+ * 扩展支持触摸坐标精确定位光标、拦截回车键（ENTER）自动拆分新建下一行清单项、
+ * 在行首按退格键（DEL）删除合并当前清单项，以及长按识别电话/网址/邮箱/地图超链接弹出快捷操作菜单。
+ */
 public class NoteEditText extends EditText {
     private static final String TAG = "NoteEditText";
+    // 当前编辑框在清单模式线性容器中的行号索引（从 0 开始）
     private int mIndex;
+    // 按下退格删除键前记录的光标起始位置（为 0 说明位于行首）
     private int mSelectionStartBeforeDelete;
     private boolean mMarkdownEnabled = false;
 
@@ -59,9 +66,10 @@ public class NoteEditText extends EditText {
     private static final Pattern STRIKETHROUGH_PATTERN = Pattern.compile("~~(.+?)~~");
     private static final Pattern HIGHLIGHT_PATTERN = Pattern.compile("==(.+?)==");
 
-    private static final String SCHEME_TEL = "tel:";
-    private static final String SCHEME_HTTP = "http:";
-    private static final String SCHEME_EMAIL = "mailto:";
+    // 支持识别的超链接协议前缀常量（电话 tel:、网页 http:、邮件 mailto:）
+    private static final String SCHEME_TEL = "tel:" ;
+    private static final String SCHEME_HTTP = "http:" ;
+    private static final String SCHEME_EMAIL = "mailto:" ;
 
     private static final Map<String, Integer> sSchemaActionResMap = new HashMap<>();
     static {
@@ -70,12 +78,19 @@ public class NoteEditText extends EditText {
         sSchemaActionResMap.put(SCHEME_EMAIL, R.string.note_link_email);
     }
 
+    /**
+     * Call by the {@link NoteEditActivity} to delete or add edit text
+     */
+    /**
+     * 清单行文本编辑事件回调接口，通知 NoteEditActivity 动态增删清单行或显隐复选框。
+     */
     public interface OnTextViewChangeListener {
         void onEditTextDelete(int index, String text);
         void onEditTextEnter(int index, String text);
         void onTextChange(int index, boolean hasText);
     }
 
+    // 清单文本变化事件回调监听器
     private OnTextViewChangeListener mOnTextViewChangeListener;
 
     /**
@@ -119,17 +134,30 @@ public class NoteEditText extends EditText {
         }
     };
 
+    // 代码动态创建时使用的单参构造方法，默认行索引为 0
     public NoteEditText(Context context) {
         super(context, null);
         mIndex = 0;
+    }
+
+    // 更新当前编辑框在清单列表中的行号索引
+    public void setIndex(int index) {
+        mIndex = index;
+    }
+
+    // 注册文本行增删与内容变化监听器
+    public void setOnTextViewChangeListener(OnTextViewChangeListener listener) {
+        mOnTextViewChangeListener = listener;
         initMarkdown();
     }
 
+    // XML 布局解析时调用的双参构造方法
     public NoteEditText(Context context, AttributeSet attrs) {
         super(context, attrs, android.R.attr.editTextStyle);
         initMarkdown();
     }
 
+    // 带默认样式属性的三参构造方法
     public NoteEditText(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         initMarkdown();
@@ -256,6 +284,9 @@ public class NoteEditText extends EditText {
     }
 
     @Override
+    /**
+     * 重写触摸事件：在手指按下（ACTION_DOWN）时根据触摸坐标换算文本行与字符偏移量，精准定位输入光标。
+     */
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
@@ -275,6 +306,9 @@ public class NoteEditText extends EditText {
     }
 
     @Override
+    /**
+     * 重写按键按下事件：拦截回车键交由 onKeyUp 拆分清单项，并在按下删除键时记录删除前的光标位置。
+     */
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {
             case KeyEvent.KEYCODE_ENTER:
@@ -292,6 +326,11 @@ public class NoteEditText extends EditText {
     }
 
     @Override
+    /**
+     * 重写按键抬起事件：
+     * - 非首行且光标在行首按 DEL 时，回调 onEditTextDelete 删除当前行并将剩余文字合并到上一行；
+     * - 按 ENTER 时，截断光标后半段文本并回调 onEditTextEnter 在下方插入新清单行。
+     */
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         switch (keyCode) {
             case KeyEvent.KEYCODE_DEL:
@@ -317,6 +356,9 @@ public class NoteEditText extends EditText {
     }
 
     @Override
+    /**
+     * 焦点变化回调：失去焦点且文本为空时通知隐藏左侧复选框，获得焦点或有内容时显示复选框。
+     */
     protected void onFocusChanged(boolean focused, int direction, Rect previouslyFocusedRect) {
         if (mOnTextViewChangeListener != null) {
             if (!focused && TextUtils.isEmpty(getText())) {
@@ -329,6 +371,10 @@ public class NoteEditText extends EditText {
     }
 
     @Override
+    /**
+     * 长按创建上下文菜单回调：检测当前光标处是否包含 URLSpan 超链接，
+     * 若包含则根据协议类型添加“呼叫电话 / 浏览网页 / 发送邮件 / 打开地图”快捷跳转菜单项。
+     */
     protected void onCreateContextMenu(ContextMenu menu) {
         if (getText() instanceof Spanned) {
             int selStart = getSelectionStart();
