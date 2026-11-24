@@ -61,35 +61,55 @@ import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
 
+/**
+ * Google Task 远程 HTTP 通信客户端类（单例模式）。
+ * 封装基于 Android AccountManager 的 Google 账号令牌认证、Cookie 会话维护、GZIP/Deflate 响应解压，
+ * 以及通过 HTTP GET/POST 调用 Google Tasks Web 接口完成任务/任务列表的查询、创建、批量更新、
+ * 跨列表移动和删除等底层网络操作。
+ */
 public class GTaskClient {
     private static final String TAG = GTaskClient.class.getSimpleName();
 
+    // Google Tasks 服务基础 URL 及标准 GET/POST 接口地址
     private static final String GTASK_URL = "https://mail.google.com/tasks/";
 
     private static final String GTASK_GET_URL = "https://mail.google.com/tasks/ig";
 
     private static final String GTASK_POST_URL = "https://mail.google.com/tasks/r/ig";
 
+    // GTaskClient 全局单例实例
     private static GTaskClient mInstance = null;
 
+    // Apache HTTP 客户端实例（携带登录 Cookie 会话）
     private DefaultHttpClient mHttpClient;
 
+    // 当前账号实际使用的 GET 请求地址（支持 Google Apps 自定义域名）
     private String mGetUrl;
 
+    // 当前账号实际使用的 POST 请求地址
     private String mPostUrl;
 
+    // 从服务端登录页面解析出的 Google Task 客户端协议版本号
     private long mClientVersion;
 
+    // 当前客户端会话是否处于已登录有效状态
     private boolean mLoggedin;
 
+    // 上一次执行登录操作的时间戳（用于 5 分钟 Cookie 过期判定）
     private long mLastLoginTime;
 
+    // 单次会话内自增的请求动作编号
     private int mActionId;
 
+    // 当前绑定用于同步的 Google 账号对象
     private Account mAccount;
 
+    // 待批量提交的更新操作（update action）缓冲队列（最多攒 10 条自动提交）
     private JSONArray mUpdateArray;
 
+    /**
+     * 私有构造方法，初始化默认请求 URL、登录状态及动作计数器。
+     */
     private GTaskClient() {
         mHttpClient = null;
         mGetUrl = GTASK_GET_URL;
@@ -102,6 +122,9 @@ public class GTaskClient {
         mUpdateArray = null;
     }
 
+    /**
+     * 线程安全地获取 GTaskClient 全局单例实例。
+     */
     public static synchronized GTaskClient getInstance() {
         if (mInstance == null) {
             mInstance = new GTaskClient();
@@ -109,6 +132,13 @@ public class GTaskClient {
         return mInstance;
     }
 
+    /**
+     * 登录用户配置的 Google Task 账号。
+     * 自动检查 5 分钟 Cookie 有效期与账号切换情况，获取 AuthToken，兼容企业自定义域名与官方域名登录。
+     *
+     * @param activity 用于弹出系统账号授权界面的 Activity 上下文
+     * @return 登录成功返回 true，失败返回 false
+     */
     public boolean login(Activity activity) {
         // we suppose that the cookie would expire after 5 minutes
         // then we need to re-login
@@ -137,6 +167,7 @@ public class GTaskClient {
         }
 
         // login with custom domain if necessary
+        // 若账号非标准 gmail/googlemail 邮箱，先尝试拼接 Google Apps 自定义域名路径登录
         if (!(mAccount.name.toLowerCase().endsWith("gmail.com") || mAccount.name.toLowerCase()
                 .endsWith("googlemail.com"))) {
             StringBuilder url = new StringBuilder(GTASK_URL).append("a/");
@@ -164,6 +195,13 @@ public class GTaskClient {
         return true;
     }
 
+    /**
+     * 通过系统 AccountManager 查找设置中选定的 Google 账号并申请 goanna_mobile 服务认证令牌。
+     *
+     * @param activity        Activity 上下文
+     * @param invalidateToken 若为 true，则先作废旧令牌再重新申请新令牌
+     * @return 获取到的 authToken 字符串；无匹配账号或授权失败时返回 null
+     */
     private String loginGoogleAccount(Activity activity, boolean invalidateToken) {
         String authToken;
         AccountManager accountManager = AccountManager.get(activity);
@@ -207,6 +245,9 @@ public class GTaskClient {
         return authToken;
     }
 
+    /**
+     * 尝试携带 authToken 登录 Google Task；若首次失败（可能是令牌过期），则刷新令牌后重试一次。
+     */
     private boolean tryToLoginGtask(Activity activity, String authToken) {
         if (!loginGtask(authToken)) {
             // maybe the auth token is out of date, now let's invalidate the
@@ -225,6 +266,13 @@ public class GTaskClient {
         return true;
     }
 
+    /**
+     * 配置 HTTP 超时与 CookieStore，发送带 auth 参数的 GET 请求登录 Google Task，
+     * 校验 GTL 认证 Cookie 并从返回 HTML 脚本 _setup(...) 中提取协议版本号 mClientVersion。
+     *
+     * @param authToken Google 账号认证令牌
+     * @return 登录并成功解析协议版本号返回 true，否则返回 false
+     */
     private boolean loginGtask(String authToken) {
         int timeoutConnection = 10000;
         int timeoutSocket = 15000;
@@ -280,10 +328,16 @@ public class GTaskClient {
         return true;
     }
 
+    /**
+     * 获取并后置递增本次 Google Task 操作的唯一动作编号。
+     */
     private int getActionId() {
         return mActionId++;
     }
 
+    /**
+     * 创建配置好 UTF-8 表单 Content-Type 与 AT:1 请求头的 HttpPost 对象。
+     */
     private HttpPost createHttpPost() {
         HttpPost httpPost = new HttpPost(mPostUrl);
         httpPost.setHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
@@ -291,6 +345,13 @@ public class GTaskClient {
         return httpPost;
     }
 
+    /**
+     * 读取 HTTP 响应体文本，自动识别并解压 gzip 和 deflate 压缩流。
+     *
+     * @param entity HTTP 响应实体对象
+     * @return 解压并拼接后的完整响应字符串
+     * @throws IOException 读取流失败时抛出
+     */
     private String getResponseContent(HttpEntity entity) throws IOException {
         String contentEncoding = null;
         if (entity.getContentEncoding() != null) {
@@ -323,6 +384,13 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 将请求 JSON 封装为表单参数 r 发送 HTTP POST 请求，并将服务端响应解析为 JSONObject 返回。
+     *
+     * @param js 待发送的请求报文 JSONObject
+     * @return 服务端响应解析后的 JSONObject
+     * @throws NetworkFailureException 网络协议或 I/O 通信失败时抛出
+     */
     private JSONObject postRequest(JSONObject js) throws NetworkFailureException {
         if (!mLoggedin) {
             Log.e(TAG, "please login first");
@@ -360,6 +428,12 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 在 Google Task 云端创建一条新任务，并将服务端分配的 new_id 回填到 task 对象的 gid 中。
+     *
+     * @param task 待创建的任务对象
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public void createTask(Task task) throws NetworkFailureException {
         commitUpdate();
         try {
@@ -386,6 +460,12 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 在 Google Task 云端创建一个新的任务列表，并将服务端返回的 new_id 回填到 tasklist 的 gid 中。
+     *
+     * @param tasklist 待创建的任务列表对象
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public void createTaskList(TaskList tasklist) throws NetworkFailureException {
         commitUpdate();
         try {
@@ -412,6 +492,11 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 将缓冲区 mUpdateArray 中累积的所有节点更新动作一次性批量提交至云端，提交后清空缓冲。
+     *
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public void commitUpdate() throws NetworkFailureException {
         if (mUpdateArray != null) {
             try {
@@ -433,6 +518,12 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 将单个节点的更新动作加入批量更新缓冲区；当缓冲条数超过 10 条时自动触发 commitUpdate 提交。
+     *
+     * @param node 待更新的云端节点（Task / MetaData / TaskList）
+     * @throws NetworkFailureException 自动批量提交网络失败时抛出
+     */
     public void addUpdateNode(Node node) throws NetworkFailureException {
         if (node != null) {
             // too many update items may result in an error
@@ -447,6 +538,14 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 在云端移动任务位置或将其从源任务列表（preParent）迁移至目标任务列表（curParent）。
+     *
+     * @param task      待移动的任务对象
+     * @param preParent 移动前所属的源任务列表
+     * @param curParent 移动后所属的目标任务列表
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public void moveTask(Task task, TaskList preParent, TaskList curParent)
             throws NetworkFailureException {
         commitUpdate();
@@ -486,6 +585,12 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 在云端删除指定任务或任务列表（将其 deleted 置为 true 后发送 update 请求）。
+     *
+     * @param node 待删除的节点对象
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public void deleteNode(Node node) throws NetworkFailureException {
         commitUpdate();
         try {
@@ -509,6 +614,12 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 通过 HTTP GET 拉取当前账号下的所有 Google Task 任务列表（从页面 _setup 脚本 JSON 中提取 lists 数组）。
+     *
+     * @return 包含所有远端任务列表的 JSONArray
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public JSONArray getTaskLists() throws NetworkFailureException {
         if (!mLoggedin) {
             Log.e(TAG, "please login first");
@@ -547,6 +658,13 @@ public class GTaskClient {
         }
     }
 
+    /**
+     * 根据任务列表 gid 发送 get_all 请求，获取该列表下所有未删除的任务集合。
+     *
+     * @param listGid 目标任务列表的云端 gid
+     * @return 包含该列表内所有任务的 JSONArray
+     * @throws NetworkFailureException 网络请求失败时抛出
+     */
     public JSONArray getTaskList(String listGid) throws NetworkFailureException {
         commitUpdate();
         try {
@@ -575,10 +693,12 @@ public class GTaskClient {
         }
     }
 
+    // 获取当前登录使用的 Google Account 对象
     public Account getSyncAccount() {
         return mAccount;
     }
 
+    // 重置清空批量更新动作缓冲队列
     public void resetUpdateArray() {
         mUpdateArray = null;
     }
