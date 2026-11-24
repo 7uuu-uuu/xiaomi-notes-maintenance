@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次美化新增：底部主操作按钮（薄荷青渐变胶囊 + 柔和投影） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:left="4dp"
+        android:right="4dp"
+        android:top="8dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#3321A99D" />
+            <corners android:radius="30dp" />
+        </shape>
+    </item>
+    <item
+        android:left="0dp"
+        android:right="0dp"
+        android:top="0dp"
+        android:bottom="8dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="0"
+                android:startColor="#34D2BF"
+                android:endColor="#17A79B" />
+            <corners android:radius="30dp" />
+        </shape>
+    </item>
+</layer-list>

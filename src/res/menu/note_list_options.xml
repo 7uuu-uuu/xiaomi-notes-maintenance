@@ -18,6 +18,22 @@
 <menu
     xmlns:android="http://schemas.android.com/apk/res/android">
     <item
+        android:id="@+id/restore"
+        android:title="@string/menu_restore"
+        android:showAsAction="always|withText" />
+
+    <!-- 本次维护新增：批量置顶 / 取消置顶、设置标签 -->
+    <item
+        android:id="@+id/pin"
+        android:title="@string/menu_pin"
+        android:showAsAction="ifRoom|withText" />
+
+    <item
+        android:id="@+id/tag"
+        android:title="@string/menu_tag"
+        android:showAsAction="never" />
+
+    <item
         android:id="@+id/move"
         android:title="@string/menu_move"
         android:icon="@drawable/menu_move"

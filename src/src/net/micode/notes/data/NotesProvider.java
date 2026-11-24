@@ -31,8 +31,10 @@ import android.util.Log;
 
 import net.micode.notes.R;
 import net.micode.notes.data.Notes.DataColumns;
+import net.micode.notes.data.Notes.HistoryColumns;
 import net.micode.notes.data.Notes.NoteColumns;
 import net.micode.notes.data.NotesDatabaseHelper.TABLE;
+import net.micode.notes.tool.HistoryPolicy;
 
 
 /**
@@ -59,6 +61,12 @@ public class NotesProvider extends ContentProvider {
     private static final int URI_SEARCH          = 5;
     private static final int URI_SEARCH_SUGGEST  = 6;
 
+    // URI 匹配码常量：7-历史版本表 note_history 集合
+    private static final int URI_HISTORY         = 7;
+
+    // URI 匹配码常量：8-便签全文搜索（同时匹配摘要与正文，返回完整的 note 列供列表使用）
+    private static final int URI_SEARCH_TEXT     = 8;
+
     // 静态初始化代码块：注册 NotesProvider 支持的所有 URI 路径匹配规则
     static {
         mMatcher = new UriMatcher(UriMatcher.NO_MATCH);
@@ -69,6 +77,8 @@ public class NotesProvider extends ContentProvider {
         mMatcher.addURI(Notes.AUTHORITY, "search", URI_SEARCH);
         mMatcher.addURI(Notes.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY, URI_SEARCH_SUGGEST);
         mMatcher.addURI(Notes.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY + "/*", URI_SEARCH_SUGGEST);
+        mMatcher.addURI(Notes.AUTHORITY, "history", URI_HISTORY);
+        mMatcher.addURI(Notes.AUTHORITY, "search_text", URI_SEARCH_TEXT);
     }
 
     /**
@@ -90,6 +100,28 @@ public class NotesProvider extends ContentProvider {
         + " WHERE " + NoteColumns.SNIPPET + " LIKE ?"
         + " AND " + NoteColumns.PARENT_ID + "<>" + Notes.ID_TRASH_FOLER
         + " AND " + NoteColumns.TYPE + "=" + Notes.TYPE_NOTE;
+
+    /**
+     * 本次维护新增：便签全文搜索 SQL。与上面的 suggest 搜索不同，本查询返回 note 表的完整列
+     * （与列表页 projection 一致），并通过 LEFT JOIN data 表把正文一起纳入匹配范围，
+     * 这样摘要没出现、正文中出现的关键词同样能命中。结果按"置顶优先 + 修改时间倒序"排列。
+     */
+    private static final String NOTES_TEXT_SEARCH_QUERY = "SELECT "
+        + "n." + NoteColumns.ID + ", n." + NoteColumns.ALERTED_DATE + ", n." + NoteColumns.BG_COLOR_ID
+        + ", n." + NoteColumns.CREATED_DATE + ", n." + NoteColumns.HAS_ATTACHMENT
+        + ", n." + NoteColumns.MODIFIED_DATE + ", n." + NoteColumns.NOTES_COUNT
+        + ", n." + NoteColumns.PARENT_ID + ", n." + NoteColumns.SNIPPET + ", n." + NoteColumns.TYPE
+        + ", n." + NoteColumns.WIDGET_ID + ", n." + NoteColumns.WIDGET_TYPE
+        + ", n." + NoteColumns.DELETED_DATE + ", n." + NoteColumns.PINNED
+        + ", n." + NoteColumns.TAG_LABEL
+        + " FROM " + TABLE.NOTE + " n LEFT JOIN " + TABLE.DATA + " d ON d."
+        + DataColumns.NOTE_ID + "=n." + NoteColumns.ID
+        + " AND d." + DataColumns.MIME_TYPE + "='" + Notes.TextNote.CONTENT_ITEM_TYPE + "'"
+        + " WHERE n." + NoteColumns.TYPE + "=" + Notes.TYPE_NOTE
+        + " AND n." + NoteColumns.PARENT_ID + "<>" + Notes.ID_TRASH_FOLER
+        + " AND (n." + NoteColumns.SNIPPET + " LIKE ? OR d." + DataColumns.CONTENT + " LIKE ?)"
+        + " GROUP BY n." + NoteColumns.ID
+        + " ORDER BY n." + NoteColumns.PINNED + " DESC, n." + NoteColumns.MODIFIED_DATE + " DESC";
 
     @Override
     /**
@@ -141,6 +173,11 @@ public class NotesProvider extends ContentProvider {
                 c = db.query(TABLE.DATA, projection, DataColumns.ID + "=" + id
                         + parseSelection(selection), selectionArgs, null, null, sortOrder);
                 break;
+            // 查询便签历史版本表，通常附带 note_id 条件以取出某条便签的版本链
+            case URI_HISTORY:
+                c = db.query(TABLE.HISTORY, projection, selection, selectionArgs, null, null,
+                        sortOrder);
+                break;
             // 处理便签内容搜索与搜索框下拉建议请求
             case URI_SEARCH:
             case URI_SEARCH_SUGGEST:
@@ -168,6 +205,19 @@ public class NotesProvider extends ContentProvider {
                     searchString = String.format("%%%s%%", searchString);
                     c = db.rawQuery(NOTES_SNIPPET_SEARCH_QUERY,
                             new String[] { searchString });
+                } catch (IllegalStateException ex) {
+                    Log.e(TAG, "got exception: " + ex.toString());
+                }
+                break;
+            // 本次维护新增：列表页全文搜索，返回完整 note 列，摘要与正文同时参与匹配
+            case URI_SEARCH_TEXT:
+                if (TextUtils.isEmpty(uri.getQueryParameter("pattern"))) {
+                    return null;
+                }
+                String textPattern = String.format("%%%s%%", uri.getQueryParameter("pattern"));
+                try {
+                    c = db.rawQuery(NOTES_TEXT_SEARCH_QUERY,
+                            new String[] { textPattern, textPattern });
                 } catch (IllegalStateException ex) {
                     Log.e(TAG, "got exception: " + ex.toString());
                 }
@@ -205,6 +255,13 @@ public class NotesProvider extends ContentProvider {
                 }
                 insertedId = dataId = db.insert(TABLE.DATA, null, values);
                 break;
+            case URI_HISTORY:
+                insertedId = db.insert(TABLE.HISTORY, null, values);
+                Long historyNoteId = values.getAsLong(HistoryColumns.NOTE_ID);
+                noteId = historyNoteId == null ? 0 : historyNoteId.longValue();
+                // 写入新版本后立即裁剪：先按便签淘汰超限的旧版本，再清理全局过期版本
+                trimHistory(db, noteId);
+                break;
             default:
                 throw new IllegalArgumentException("Unknown URI " + uri);
         }
@@ -222,7 +279,75 @@ public class NotesProvider extends ContentProvider {
                     ContentUris.withAppendedId(Notes.CONTENT_DATA_URI, dataId), null);
         }
 
+        // Notify the history uri
+        // 通知监听历史版本 URI 的观察者，历史列表与版本数已发生变化
+        if (insertedId > 0 && mMatcher.match(uri) == URI_HISTORY) {
+            getContext().getContentResolver().notifyChange(Notes.CONTENT_HISTORY_URI, null);
+        }
+
         return ContentUris.withAppendedId(uri, insertedId);
+    }
+
+    /**
+     * 按保留策略裁剪历史版本：删除指定便签超出上限的最旧版本，并清理超出保留天数的全局过期版本。
+     * 保留条数上限与保留天数统一由 {@link HistoryPolicy} 提供，避免规则散落在多处。
+     *
+     * @param db     可写的 SQLiteDatabase 实例
+     * @param noteId 刚写入历史版本的便签 ID（<=0 表示无需按便签裁剪）
+     */
+    private void trimHistory(SQLiteDatabase db, long noteId) {
+        if (noteId > 0) {
+            int excess = HistoryPolicy.excessCount(
+                    countHistory(db, noteId), HistoryPolicy.MAX_VERSIONS_PER_NOTE);
+            if (excess > 0) {
+                // 先按归档时间升序取出最旧的 excess 条记录 ID，再按 ID 批量删除
+                Cursor oldest = db.query(TABLE.HISTORY,
+                        new String[] { HistoryColumns.ID },
+                        HistoryColumns.NOTE_ID + "=?",
+                        new String[] { String.valueOf(noteId) },
+                        null, null,
+                        HistoryColumns.SAVED_DATE + " ASC," + HistoryColumns.ID + " ASC");
+                int deleted = 0;
+                if (oldest != null) {
+                    try {
+                        while (oldest.moveToNext() && deleted < excess) {
+                            db.delete(TABLE.HISTORY, HistoryColumns.ID + "=?",
+                                    new String[] { String.valueOf(oldest.getLong(0)) });
+                            deleted++;
+                        }
+                    } finally {
+                        oldest.close();
+                    }
+                }
+            }
+        }
+        // 清理超过保留期的历史版本，控制数据库体积
+        long boundary = HistoryPolicy.retentionBoundary(System.currentTimeMillis(),
+                HistoryPolicy.RETENTION_DAYS);
+        db.delete(TABLE.HISTORY, HistoryColumns.SAVED_DATE + "< CAST(? AS INTEGER)",
+                new String[] { String.valueOf(boundary) });
+    }
+
+    /**
+     * 统计指定便签已存在的历史版本条数。
+     *
+     * @param db     可读的 SQLiteDatabase 实例
+     * @param noteId 便签 ID
+     * @return 历史版本条数
+     */
+    private int countHistory(SQLiteDatabase db, long noteId) {
+        Cursor cursor = db.query(TABLE.HISTORY, new String[] { HistoryColumns.ID },
+                HistoryColumns.NOTE_ID + "=?",
+                new String[] { String.valueOf(noteId) }, null, null, null);
+        int count = 0;
+        if (cursor != null) {
+            try {
+                count = cursor.getCount();
+            } finally {
+                cursor.close();
+            }
+        }
+        return count;
     }
 
     @Override

@@ -65,6 +65,26 @@
     <string name="menu_remove_remind">删除提醒</string>
     <string name="menu_title_select_folder">选择文件夹</string>
     <string name="menu_move_parent_folder">上一级文件夹</string>
+    <!-- 回收站与历史版本 -->
+    <string name="menu_restore">恢复</string>
+    <string name="menu_delete_forever">彻底删除</string>
+    <string name="menu_history">历史版本</string>
+    <string name="trash_folder_name">回收站</string>
+    <!-- 本次美化新增：标题栏返回按钮与根目录标题 -->
+    <string name="menu_back">返回</string>
+    <string name="all_notes_name">全部便签</string>
+    <string name="alert_message_restore_notes">确认将选中的 %d 条便签恢复？</string>
+    <string name="alert_message_delete_forever">确认彻底删除选中的 %d 条便签？该操作不可撤销。</string>
+    <string name="alert_message_delete_to_trash">选中的 %d 条便签将被移入回收站</string>
+    <string name="info_note_moved_to_trash">便签已移入回收站</string>
+    <string name="trash_retention_notice">回收站中的便签将在 %d 天后被永久删除</string>
+    <string name="trash_empty">回收站为空</string>
+    <string name="trash_purged_format">已从回收站清理 %d 条过期便签</string>
+    <string name="history_dialog_title">历史版本</string>
+    <string name="history_empty">暂无历史版本，便签被修改后会自动归档旧内容</string>
+    <string name="history_item_format">%1$s  %2$s</string>
+    <string name="history_restore_confirm">确认用该版本替换当前内容？</string>
+    <string name="history_restored">已恢复历史版本</string>
     <string name="info_note_enter_desktop">已添加到桌面</string>
     <string name="alert_title_delete">删除</string>
     <string name="alert_message_delete_notes">确认要删除所选的 %d 条便签吗?</string>
@@ -123,4 +143,45 @@
         <item quantity="other"><xliff:g id="NUMBER">%1$s</xliff:g> 条符合“<xliff:g id="SEARCH">%2$s</xliff:g>”的搜索结果</item>
     </plurals>
 
+    <!-- 本次维护新增：置顶、排序、标签与搜索相关文案 -->
+    <string name="menu_sort">排序方式</string>
+    <string name="sort_by_modified">按修改时间</string>
+    <string name="sort_by_created">按创建时间</string>
+    <string name="sort_dialog_title">排序方式</string>
+    <string name="menu_pin">置顶</string>
+    <string name="menu_unpin">取消置顶</string>
+    <string name="menu_tag">设置标签</string>
+    <string name="menu_filter_tag">按标签筛选</string>
+    <string name="tag_dialog_title">便签标签</string>
+    <string name="tag_hint">输入标签名称，留空即清除</string>
+    <string name="tag_filter_title">全部标签</string>
+    <string name="tag_filter_all">显示全部便签</string>
+    <string name="tag_filter_empty">还没有标签</string>
+    <string name="search_no_result">没有匹配的便签</string>
+    <string name="tag_filter_no_result">该标签下还没有便签</string>
+    <string name="search_result_format">找到 %1$s 条便签</string>
+    <string name="search_clear">清空</string>
+    <string name="menu_more">更多</string>
+    <string name="swipe_pinned">已置顶</string>
+    <string name="menu_multi_select">多选</string>
+    <string name="undo_trash_tip">已移入回收站</string>
+    <string name="undo_action">撤销</string>
+    <string name="undo_restored">已恢复便签</string>
+    <string name="alert_message_swipe_delete">确认把这 1 条便签移入回收站吗？</string>
+    <string name="swipe_unpinned">已取消置顶</string>
+
+    <string name="font_size_max">已是最大字号</string>
+    <string name="font_size_min">已是最小字号</string>
+    <string name="menu_layout_mode">切换视图</string>
+
+    <!-- 本次维护新增：正文图片附件 -->
+    <string name="word_count_format">%d 字</string>
+    <string name="menu_insert_image">插入图片</string>
+    <string name="image_from_gallery">从相册选择</string>
+    <string name="image_take_photo">拍照</string>
+    <string name="image_pick_title">选择图片</string>
+    <string name="image_insert_failed">图片添加失败</string>
+    <string name="image_no_camera">设备上没有可用的相机应用</string>
+    <string name="image_list_mode_unsupported">清单模式下暂不支持插入图片，请切换到普通模式</string>
+    <string name="image_placeholder">[图片]</string>
 </resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次美化新增：顶部标题栏白底 + 1dp 底部分割线 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/top_bar_bg" />
+        </shape>
+    </item>
+    <item
+        android:gravity="bottom"
+        android:height="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/top_bar_divider" />
+        </shape>
+    </item>
+</layer-list>

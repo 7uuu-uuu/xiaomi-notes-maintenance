@@ -19,23 +19,111 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:background="@drawable/list_background">
+    android:background="@drawable/bg_app">
 
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/tv_title_bar"
+        <LinearLayout
+            android:id="@+id/title_bar_layout"
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/title_bar_bg"
-            android:visibility="gone"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_top_bar"
+            android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:singleLine="true"
-            android:textColor="#FFEAD1AE"
-            android:textSize="@dimen/text_font_size_medium" />
+            android:paddingLeft="6dp"
+            android:paddingRight="20dp">
+
+            <!-- 本次美化新增：子目录（文件夹 / 通话便签 / 回收站）可见的返回箭头 -->
+            <ImageView
+                android:id="@+id/btn_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_back"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_back"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_title_bar"
+                android:layout_width="0dip"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginLeft="4dp"
+                android:gravity="center_vertical"
+                android:singleLine="true"
+                android:textColor="@color/text_title"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <!-- 本次维护新增：进入搜索入口 -->
+            <ImageView
+                android:id="@+id/btn_search"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="9dp"
+                android:src="@drawable/ic_search"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_search" />
+
+            <!-- 本次维护新增：常驻右上角菜单按钮，替代需要 MENU 键才能唤起的选项菜单 -->
+            <TextView
+                android:id="@+id/btn_menu"
+                android:layout_width="36dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="⋮"
+                android:textColor="@color/icon_title"
+                android:textSize="22sp"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_more" />
+        </LinearLayout>
+
+        <!-- 本次维护新增：搜索栏，点击搜索按钮后替换显示 -->
+        <LinearLayout
+            android:id="@+id/search_bar"
+            android:layout_width="fill_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_top_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="16dp"
+            android:paddingRight="8dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_search"
+                android:contentDescription="@string/menu_search" />
+
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="0dip"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginLeft="10dp"
+                android:background="@null"
+                android:hint="@string/search_hint"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint"
+                android:textSize="15sp" />
+
+            <ImageView
+                android:id="@+id/btn_search_close"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="10dp"
+                android:src="@drawable/ic_close"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_back" />
+        </LinearLayout>
 
         <ListView
             android:id="@+id/notes_list"
@@ -45,14 +133,90 @@
             android:cacheColorHint="@null"
             android:listSelector="@android:color/transparent"
             android:divider="@null"
+            android:scrollbars="none"
+            android:paddingTop="8dp"
+            android:paddingBottom="96dp"
+            android:clipToPadding="false"
             android:fadingEdge="@null" />
+
+        <!-- 本次维护新增：双列网格视图，与列表视图互斥显示，由标题栏菜单切换 -->
+        <GridView
+            android:id="@+id/notes_grid"
+            android:layout_width="fill_parent"
+            android:layout_height="0dip"
+            android:layout_weight="1"
+            android:cacheColorHint="@null"
+            android:clipToPadding="false"
+            android:numColumns="2"
+            android:listSelector="@android:color/transparent"
+            android:scrollbars="none"
+            android:paddingTop="8dp"
+            android:paddingBottom="96dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 本次维护新增：搜索无结果 / 标签筛选无结果时的空态提示 -->
+    <TextView
+        android:id="@+id/tv_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="200dp"
+        android:gravity="center"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- 本次维护新增：最近一次删除后的底部撤销提示条 -->
+    <LinearLayout
+        android:id="@+id/undo_bar"
+        android:layout_width="fill_parent"
+        android:layout_height="52dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:layout_marginBottom="96dp"
+        android:background="@drawable/bg_undo_bar"
+        android:elevation="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="20dp"
+        android:paddingRight="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/undo_trash_tip"
+            android:textColor="@color/undo_text"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/btn_undo"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:text="@string/undo_action"
+            android:textColor="@color/undo_action"
+            android:textSize="14sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <Button
         android:id="@+id/btn_new_note"
-        android:background="@drawable/new_note"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_width="200dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/bg_fab"
         android:focusable="false"
-        android:layout_gravity="bottom" />
+        android:text="+  写便签"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.03"
+        android:stateListAnimator="@null" />
 </FrameLayout>

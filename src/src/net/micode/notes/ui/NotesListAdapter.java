@@ -45,6 +45,34 @@ public class NotesListAdapter extends CursorAdapter {
     private int mNotesCount;
     // 当前列表是否处于长按触发的批量多选编辑模式
     private boolean mChoiceMode;
+    // 本次维护新增：搜索态下需要高亮的关键词，null 表示不高亮
+    private String mHighlightKeyword;
+    // 本次维护新增：列表行内“更多操作”按钮的点击回调
+    private View.OnClickListener mItemMenuClickListener;
+    // 本次维护新增：双列网格模式下的紧凑排版（隐藏相对时间，避免半宽卡片过于拥挤）
+    private boolean mCompactMode;
+
+    /**
+     * 本次维护新增：切换紧凑排版。
+     */
+    public void setCompactMode(boolean compact) {
+        mCompactMode = compact;
+        notifyDataSetChanged();
+    }
+
+    /**
+     * 本次维护新增：设置行内“更多操作”按钮的点击回调。
+     */
+    public void setItemMenuClickListener(View.OnClickListener listener) {
+        mItemMenuClickListener = listener;
+    }
+
+    /**
+     * 本次维护新增：设置摘要中需要高亮的关键词。
+     */
+    public void setHighlightKeyword(String keyword) {
+        mHighlightKeyword = keyword;
+    }
 
     /**
      * 桌面小部件属性结构体静态内部类，保存小部件实例 ID 与尺寸类型，供删除便签后刷新桌面使用。
@@ -79,6 +107,9 @@ public class NotesListAdapter extends CursorAdapter {
     public void bindView(View view, Context context, Cursor cursor) {
         if (view instanceof NotesListItem) {
             NoteItemData itemData = new NoteItemData(context, cursor);
+            ((NotesListItem) view).setHighlightKeyword(mHighlightKeyword);
+            ((NotesListItem) view).setItemMenuClickListener(mItemMenuClickListener);
+            ((NotesListItem) view).setCompactMode(mCompactMode);
             ((NotesListItem) view).bind(context, itemData, mChoiceMode,
                     isSelectedItem(cursor.getPosition()));
         }

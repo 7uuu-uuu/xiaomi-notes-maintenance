@@ -15,6 +15,8 @@
      limitations under the License.
 -->
 
+<!-- 本次美化调整：辅助信息改为浅灰蓝，弱化但不失可读性 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-  <item android:color="#50000000" />
+  <item android:state_pressed="true" android:color="#B398A3B3" />
+  <item android:color="#98A3B3" />
 </selector>

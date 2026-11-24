@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次美化新增：编辑页正文纸面（浅色圆角卡片） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/card_red" />
+    <corners android:radius="18dp" />
+    <stroke android:width="1dp" android:color="@color/card_stroke" />
+</shape>

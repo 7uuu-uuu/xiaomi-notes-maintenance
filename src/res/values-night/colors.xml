@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次维护新增：夜间模式配色令牌（跟随系统深色主题自动生效） -->
+<resources>
+    <color name="app_bg_start">#0F1519</color>
+    <color name="app_bg_center">#121A20</color>
+    <color name="app_bg_end">#121A20</color>
+    <color name="top_bar_bg">#161E25</color>
+    <color name="top_bar_divider">#242E38</color>
+    <color name="card_white">#1A222A</color>
+    <color name="card_yellow">#221F17</color>
+    <color name="card_green">#17241F</color>
+    <color name="card_red">#241A1D</color>
+    <color name="card_blue">#161F2B</color>
+    <color name="folder_card">#1C242C</color>
+    <color name="folder_stroke">#2B3541</color>
+    <color name="card_stroke">#2A3340</color>
+    <color name="text_primary">#E3EAF2</color>
+    <color name="text_secondary">#93A1B0</color>
+    <color name="text_title">#E8F0F8</color>
+    <color name="text_hint">#7B8798</color>
+    <color name="icon_more">#93A1B0</color>
+    <color name="icon_title">#A9B6C4</color>
+    <color name="tag_chip_bg">#17312E</color>
+    <color name="tag_text">#4FD1C5</color>
+    <color name="undo_bar_bg">#2A323B</color>
+    <color name="undo_text">#E3EAF2</color>
+    <color name="undo_action">#4FD1C5</color>
+</resources>

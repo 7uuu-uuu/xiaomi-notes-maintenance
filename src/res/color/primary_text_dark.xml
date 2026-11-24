@@ -15,8 +15,9 @@
      limitations under the License.
 -->
 
+<!-- 本次美化调整：主文字改为深灰蓝，按下态以半透明覆盖保持对比 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-  <item android:state_pressed="true" android:color="#88555555" />
-  <item android:state_selected="true" android:color="#ff999999" />
-  <item android:color="#ff000000" />
+  <item android:state_pressed="true" android:color="#991F2A37" />
+  <item android:state_selected="true" android:color="#B31F2A37" />
+  <item android:color="#1F2A37" />
 </selector>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次美化新增：编辑页顶部信息条（同色系浅底） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/card_yellow" />
+    <corners android:radius="18dp" />
+</shape>

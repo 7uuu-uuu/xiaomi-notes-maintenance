@@ -27,14 +27,24 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Paint;
+import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.text.Spannable;
 import android.text.SpannableString;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.text.InputFilter;
 import android.text.format.DateUtils;
 import android.text.style.BackgroundColorSpan;
+import android.text.style.ImageSpan;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -49,8 +59,11 @@ import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
 
 import net.micode.notes.R;
 import net.micode.notes.data.Notes;
@@ -58,6 +71,9 @@ import net.micode.notes.data.Notes.TextNote;
 import net.micode.notes.model.WorkingNote;
 import net.micode.notes.model.WorkingNote.NoteSettingChangedListener;
 import net.micode.notes.tool.DataUtils;
+import net.micode.notes.tool.HistoryPolicy;
+import net.micode.notes.tool.NoteImageUtils;
+import net.micode.notes.tool.NoteTextUtils;
 import net.micode.notes.tool.ResourceParser;
 import net.micode.notes.tool.ResourceParser.TextAppearanceResources;
 import net.micode.notes.ui.DateTimePickerDialog.OnDateTimeSetListener;
@@ -65,6 +81,9 @@ import net.micode.notes.ui.NoteEditText.OnTextViewChangeListener;
 import net.micode.notes.widget.NoteWidgetProvider_2x;
 import net.micode.notes.widget.NoteWidgetProvider_4x;
 
+import java.io.File;
+import java.text.DateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -144,6 +163,12 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     private View mNoteEditorPanel;
 
+    // 本次维护新增：标题栏实时字数统计文本控件
+    private TextView mWordCountView;
+
+    // 本次维护新增：标题栏标签小条（显示当前标签）
+    private TextView mTagView;
+
     // 当前正在查看或编辑的工作便签数据模型对象
     private WorkingNote mWorkingNote;
 
@@ -155,6 +180,23 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     // 发送到桌面快捷方式图标名称的最大截取字符数
     private static final int SHORTCUT_ICON_TITLE_MAX_LEN = 10;
+
+    // 本次维护新增：单个便签标签允许的最大字符数（与列表页批量设置标签保持一致）
+    private static final int TAG_MAX_LEN = 12;
+
+    // 本次维护新增：正文图片插入相关
+    private static final int REQUEST_PICK_IMAGE = 2001;
+    private static final int REQUEST_TAKE_PHOTO = 2002;
+    private static final String FILE_PROVIDER_AUTHORITY = "net.micode.notes.fileprovider";
+    // 正文图片标记，与 NoteImageUtils 中的存储格式保持一致
+    private static final Pattern IMAGE_MARKER_PATTERN =
+            Pattern.compile("\\[img:([A-Za-z0-9_\\-]+(\\.jpg|\\.png))\\]");
+    // 正文图片解码缓存，key 为“文件名@宽x高”，避免滚动、重绘时反复解码大图
+    private final Map<String, Bitmap> mImageCache = new HashMap<String, Bitmap>();
+    // 拍照输出 Uri，等待 onActivityResult 回读
+    private Uri mPendingCameraUri;
+    // 编辑区尚未完成布局时，避免重复 post 渲染图片
+    private boolean mImageAttachPosted;
 
     // 清单模式持久化存储时每行前缀的 Unicode 符号：'√'（\u221A）表示已勾选，'□'（\u25A1）表示未勾选
     public static final String TAG_CHECKED = String.valueOf('\u221A');
@@ -228,6 +270,13 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             if (intent.hasExtra(SearchManager.EXTRA_DATA_KEY)) {
                 noteId = Long.parseLong(intent.getStringExtra(SearchManager.EXTRA_DATA_KEY));
                 mUserQuery = intent.getStringExtra(SearchManager.USER_QUERY);
+            }
+            // 本次维护新增：由应用内搜索结果进入时同样带上关键词，用于正文高亮
+            if (TextUtils.isEmpty(mUserQuery)) {
+                String extraQuery = intent.getStringExtra(SearchManager.USER_QUERY);
+                if (!TextUtils.isEmpty(extraQuery)) {
+                    mUserQuery = extraQuery;
+                }
             }
 
             if (!DataUtils.visibleInNoteDatabase(getContentResolver(), noteId, Notes.TYPE_NOTE)) {
@@ -316,7 +365,16 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             switchToListMode(mWorkingNote.getContent());
         } else {
             mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
-            mNoteEditor.setSelection(mNoteEditor.getText().length());
+            // 本次维护新增：正文里的图片标记渲染成真实图片
+            attachImagesToEditor();
+            // 本次维护新增：由搜索进入时把光标落在首个命中处，EditText 会自动滚动到该行
+            String plainText = mNoteEditor.getText().toString();
+            if (!TextUtils.isEmpty(mUserQuery)) {
+                int hit = plainText.toLowerCase().indexOf(mUserQuery.toLowerCase());
+                mNoteEditor.setSelection(hit >= 0 ? hit : plainText.length());
+            } else {
+                mNoteEditor.setSelection(plainText.length());
+            }
         }
         for (Integer id : sBgSelectorSelectionMap.keySet()) {
             findViewById(sBgSelectorSelectionMap.get(id)).setVisibility(View.GONE);
@@ -334,6 +392,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
          * is not ready
          */
         showAlertHeader();
+        // 本次维护新增：进入或刷新编辑界面时同步刷新字数统计
+        updateWordCount();
     }
 
     /**
@@ -414,8 +474,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
                 || ev.getX() > (x + view.getWidth())
                 || ev.getY() < y
                 || ev.getY() > (y + view.getHeight())) {
-                    return false;
-                }
+            return false;
+        }
         return true;
     }
 
@@ -424,6 +484,13 @@ public class NoteEditActivity extends Activity implements OnClickListener,
      */
     private void initResources() {
         mHeadViewPanel = findViewById(R.id.note_title);
+        // 本次美化新增：编辑页标题栏返回按钮，复用系统返回逻辑（先关浮层、再保存退出）
+        findViewById(R.id.btn_edit_back).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onBackPressed();
+            }
+        });
         mNoteHeaderHolder = new HeadViewHolder();
         mNoteHeaderHolder.tvModified = (TextView) findViewById(R.id.tv_modified_date);
         mNoteHeaderHolder.ivAlertIcon = (ImageView) findViewById(R.id.iv_alert_icon);
@@ -439,6 +506,17 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         }
 
         mFontSizeSelector = findViewById(R.id.font_size_selector);
+        // 本次维护新增：标题栏 A- / A+ 快捷调节正文字号
+        findViewById(R.id.btn_font_dec).setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                adjustFontSize(-1);
+            }
+        });
+        findViewById(R.id.btn_font_inc).setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                adjustFontSize(1);
+            }
+        });
         for (int id : sFontSizeBtnsMap.keySet()) {
             View view = findViewById(id);
             view.setOnClickListener(this);
@@ -454,6 +532,310 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             mFontSizeId = ResourceParser.BG_DEFAULT_FONT_SIZE;
         }
         mEditTextList = (LinearLayout) findViewById(R.id.note_edit_list);
+        // 本次维护新增：绑定字数统计控件，并为普通文本编辑框注册文本变化监听以实时刷新字数
+        mWordCountView = (TextView) findViewById(R.id.tv_word_count);
+        // 本次维护新增：编辑页内的标签展示与打标签入口，避免必须回列表长按才能设置标签
+        mTagView = (TextView) findViewById(R.id.tv_edit_tag);
+        findViewById(R.id.btn_edit_tag).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showTagDialog();
+            }
+        });
+        // 本次维护新增：正文插入图片入口，点击弹出“相册选择 / 拍照”菜单
+        findViewById(R.id.btn_insert_image).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showImageSourceMenu(v);
+            }
+        });
+        updateTagDisplay();
+        mNoteEditor.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateWordCount();
+            }
+
+            public void afterTextChanged(Editable s) {
+            }
+        });
+    }
+
+    /**
+     * 本次维护新增：弹框给当前便签设置标签，留空即清除标签。
+     * 新建便签尚未落库时先保存一次，确保能拿到便签主键再写标签。
+     */
+    private void showTagDialog() {
+        if (mWorkingNote == null) {
+            return;
+        }
+        saveNote();
+        final long noteId = mWorkingNote.getNoteId();
+        if (noteId <= 0) {
+            showToast(R.string.error_note_not_exist);
+            return;
+        }
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(R.string.tag_hint);
+        input.setText(DataUtils.getNoteTag(getContentResolver(), noteId));
+        input.setSelection(input.getText().length());
+        input.setFilters(new InputFilter[] { new InputFilter.LengthFilter(TAG_MAX_LEN) });
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.tag_dialog_title)
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        String tag = input.getText().toString().trim();
+                        DataUtils.setNoteTag(getContentResolver(), noteId, tag);
+                        updateTagDisplay();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /**
+     * 本次维护新增：把当前便签的标签同步显示到标题栏小条，无标签时隐藏。
+     */
+    private void updateTagDisplay() {
+        if (mTagView == null || mWorkingNote == null) {
+            return;
+        }
+        String tag = DataUtils.getNoteTag(getContentResolver(), mWorkingNote.getNoteId());
+        if (TextUtils.isEmpty(tag)) {
+            mTagView.setVisibility(View.GONE);
+        } else {
+            mTagView.setText(tag);
+            mTagView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /**
+     * 本次维护新增：弹出正文插入图片的来源选择菜单（相册 / 拍照）。
+     */
+    private void showImageSourceMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        getMenuInflater().inflate(R.menu.note_insert_image, popup.getMenu());
+        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            public boolean onMenuItemClick(MenuItem item) {
+                int id = item.getItemId();
+                if (id == R.id.item_pick_gallery) {
+                    pickImageFromGallery();
+                    return true;
+                } else if (id == R.id.item_take_photo) {
+                    takePhoto();
+                    return true;
+                }
+                return false;
+            }
+        });
+        popup.show();
+    }
+
+    /**
+     * 本次维护新增：打开系统相册/文件选择器挑选图片。
+     */
+    private void pickImageFromGallery() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(Intent.createChooser(intent,
+                    getString(R.string.image_pick_title)), REQUEST_PICK_IMAGE);
+        } catch (android.content.ActivityNotFoundException e) {
+            Log.e(TAG, "No gallery app available", e);
+            Toast.makeText(this, R.string.image_insert_failed, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * 本次维护新增：调用系统相机拍照，输出到应用缓存目录的临时文件，
+     * 通过 FileProvider 生成 content:// Uri 交给相机写入（Android 7.0 起不允许传 file://）。
+     * 应用未声明 CAMERA 权限时使用 ACTION_IMAGE_CAPTURE 是官方推荐做法，无需运行时授权。
+     */
+    private void takePhoto() {
+        File temp = new File(NoteImageUtils.getCameraTempDir(this),
+                "cap_" + System.currentTimeMillis() + ".jpg");
+        try {
+            mPendingCameraUri = FileProvider.getUriForFile(this, FILE_PROVIDER_AUTHORITY, temp);
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Build camera output uri failed", e);
+            Toast.makeText(this, R.string.image_insert_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, mPendingCameraUri);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQUEST_TAKE_PHOTO);
+        } catch (android.content.ActivityNotFoundException e) {
+            Log.e(TAG, "No camera app available", e);
+            mPendingCameraUri = null;
+            Toast.makeText(this, R.string.image_no_camera, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    /**
+     * 本次维护新增：接收相册选择或拍照结果，统一交给后台任务压缩入库。
+     */
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK) {
+            return;
+        }
+        Uri source = null;
+        if (requestCode == REQUEST_PICK_IMAGE && data != null) {
+            source = data.getData();
+        } else if (requestCode == REQUEST_TAKE_PHOTO) {
+            source = mPendingCameraUri;
+        }
+        if (source == null) {
+            return;
+        }
+        importAndInsertImage(source);
+    }
+
+    /**
+     * 本次维护新增：后台压缩保存图片，成功后把 [img:文件名] 标记插入正文光标处。
+     */
+    private void importAndInsertImage(final Uri source) {
+        if (mWorkingNote == null) {
+            return;
+        }
+        if (mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+            Toast.makeText(this, R.string.image_list_mode_unsupported, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AsyncTask<Void, Void, String>() {
+            protected String doInBackground(Void... params) {
+                return NoteImageUtils.importFromUri(NoteEditActivity.this, source);
+            }
+
+            protected void onPostExecute(String fileName) {
+                if (isFinishing() || mNoteEditor == null) {
+                    return;
+                }
+                if (fileName == null) {
+                    Toast.makeText(NoteEditActivity.this, R.string.image_insert_failed,
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                insertImageMarker(fileName);
+            }
+        }.execute();
+    }
+
+    /**
+     * 本次维护新增：在光标处插入独占一行的图片标记，并立即渲染成图片、落库一次。
+     */
+    private void insertImageMarker(String fileName) {
+        Editable editable = mNoteEditor.getText();
+        if (editable == null) {
+            return;
+        }
+        int cursor = mNoteEditor.getSelectionStart();
+        if (cursor < 0 || cursor > editable.length()) {
+            cursor = editable.length();
+        }
+        boolean needLeadingBreak = cursor > 0 && editable.charAt(cursor - 1) != '\n';
+        boolean needTrailingBreak = cursor < editable.length() && editable.charAt(cursor) != '\n';
+        String block = (needLeadingBreak ? "\n" : "")
+                + NoteImageUtils.buildMarker(fileName)
+                + (needTrailingBreak ? "\n\n" : "\n");
+        editable.insert(cursor, block);
+        attachImagesToEditor();
+        mNoteEditor.setSelection(Math.min(cursor + block.length(), editable.length()));
+        // 图片插入属于明确的内容变更，立即保存一次，保证列表摘要与数据库同步
+        saveNote();
+    }
+
+    /**
+     * 本次维护新增：把正文里的 [img:文件名] 标记渲染成行内图片。
+     * 标记文本本身保留在数据层（保存、导出、搜索都是纯文本），只在显示层替换为 ImageSpan。
+     * 图片宽度按编辑区可用宽度等比缩放，高度不超过屏幕高度的 42%，避免一图占满整屏。
+     */
+    private void attachImagesToEditor() {
+        if (mNoteEditor == null || mWorkingNote == null) {
+            return;
+        }
+        Editable text = mNoteEditor.getText();
+        if (text == null) {
+            return;
+        }
+        // 先清除旧的图片 Span，避免重复设置导致同一标记叠加多张图
+        ImageSpan[] oldSpans = text.getSpans(0, text.length(), ImageSpan.class);
+        for (ImageSpan span : oldSpans) {
+            text.removeSpan(span);
+        }
+        String plain = text.toString();
+        if (plain.indexOf("[img:") < 0) {
+            return;
+        }
+        // 编辑区尚未完成布局时宽度为 0，等下一帧再渲染一次
+        if (mNoteEditor.getWidth() <= 0) {
+            if (!mImageAttachPosted) {
+                mImageAttachPosted = true;
+                mNoteEditor.post(new Runnable() {
+                    public void run() {
+                        mImageAttachPosted = false;
+                        attachImagesToEditor();
+                    }
+                });
+            }
+            return;
+        }
+        int available = mNoteEditor.getWidth() - mNoteEditor.getPaddingLeft()
+                - mNoteEditor.getPaddingRight();
+        if (available <= 0) {
+            available = getResources().getDisplayMetrics().widthPixels - dpToPx(64);
+        }
+        int maxWidth = Math.max(1, available);
+        int maxHeight = Math.max(1,
+                (int) (getResources().getDisplayMetrics().heightPixels * 0.55f));
+
+        Matcher matcher = IMAGE_MARKER_PATTERN.matcher(plain);
+        while (matcher.find()) {
+            String fileName = matcher.group(1);
+            Bitmap bitmap = loadImageBitmap(fileName, maxWidth, maxHeight);
+            if (bitmap == null) {
+                // 图片文件缺失时保留原文本标记，提示内容已被移除而不是静默丢弃
+                continue;
+            }
+            BitmapDrawable drawable = new BitmapDrawable(getResources(), bitmap);
+            drawable.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
+            ImageSpan imageSpan = new ImageSpan(drawable, fileName);
+            text.setSpan(imageSpan, matcher.start(), matcher.end(),
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+    }
+
+    /**
+     * 本次维护新增：按“文件名 + 目标尺寸”缓存解码结果，避免每次重绘都解码大图。
+     */
+    private Bitmap loadImageBitmap(String fileName, int maxWidth, int maxHeight) {
+        String key = fileName + "@" + maxWidth + "x" + maxHeight;
+        Bitmap cached = mImageCache.get(key);
+        if (cached != null && !cached.isRecycled()) {
+            return cached;
+        }
+        File file = NoteImageUtils.getImageFile(this, fileName);
+        Bitmap bitmap = NoteImageUtils.decodeSized(file, maxWidth, maxHeight);
+        if (bitmap != null) {
+            mImageCache.put(key, bitmap);
+        }
+        return bitmap;
+    }
+
+    /**
+     * 本次维护新增：dp 转 px，供尺寸兜底计算使用。
+     */
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 
     @Override
@@ -483,7 +865,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         }
 
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, new int[] {
-            mWorkingNote.getWidgetId()
+                mWorkingNote.getWidgetId()
         });
 
         sendBroadcast(intent);
@@ -498,7 +880,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         if (id == R.id.btn_set_bg_color) {
             mNoteBgColorSelector.setVisibility(View.VISIBLE);
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
-                    -                    View.VISIBLE);
+                    View.VISIBLE);
         } else if (sBgSelectorBtnsMap.containsKey(id)) {
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
                     View.GONE);
@@ -518,6 +900,30 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             }
             mFontSizeSelector.setVisibility(View.GONE);
         }
+    }
+
+    @Override
+    /**
+     * 本次维护新增：退出编辑页时释放正文图片解码缓存，避免多张图片长期占用内存。
+     * 回收前先摘掉编辑区上的 ImageSpan，防止已回收的位图仍被绘制。
+     */
+    protected void onDestroy() {
+        if (mNoteEditor != null) {
+            Editable text = mNoteEditor.getText();
+            if (text != null) {
+                ImageSpan[] spans = text.getSpans(0, text.length(), ImageSpan.class);
+                for (ImageSpan span : spans) {
+                    text.removeSpan(span);
+                }
+            }
+        }
+        for (Bitmap bitmap : mImageCache.values()) {
+            if (bitmap != null && !bitmap.isRecycled()) {
+                bitmap.recycle();
+            }
+        }
+        mImageCache.clear();
+        super.onDestroy();
     }
 
     @Override
@@ -557,6 +963,37 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         mHeadViewPanel.setBackgroundResource(mWorkingNote.getTitleBgResId());
     }
 
+    /**
+     * 本次维护新增：在现有四档字号之间上/下调一档，边界给出提示；结果写入偏好并对所有便签生效。
+     */
+    private void adjustFontSize(int delta) {
+        int target = mFontSizeId + delta;
+        if (target < ResourceParser.TEXT_SMALL || target > ResourceParser.TEXT_SUPER) {
+            Toast.makeText(this, delta > 0 ? R.string.font_size_max : R.string.font_size_min,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mFontSizeId = target;
+        mSharedPrefs.edit().putInt(PREFERENCE_FONT_SIZE, mFontSizeId).commit();
+        applyFontSizeToEditor();
+    }
+
+    /**
+     * 本次维护新增：把当前字号档位应用到正文（清单模式下重建列表项）。
+     */
+    private void applyFontSizeToEditor() {
+        if (mWorkingNote == null) {
+            return;
+        }
+        if (mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+            getWorkingText();
+            switchToListMode(mWorkingNote.getContent());
+        } else if (mNoteEditor != null) {
+            mNoteEditor.setTextAppearance(this,
+                    TextAppearanceResources.getTexAppearanceResource(mFontSizeId));
+        }
+    }
+
     @Override
     /**
      * 每次展开选项菜单前动态准备菜单项：区分通话便签与普通便签菜单，动态切换清单模式与提醒菜单项的文案/显隐。
@@ -590,50 +1027,134 @@ public class NoteEditActivity extends Activity implements OnClickListener,
      * 选项菜单点击分发：处理新建便签、删除便签、调整字号、切换清单模式、分享、发送到桌面、设置及删除提醒。
      */
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_new_note:
-                createNewNote();
-                break;
-            case R.id.menu_delete:
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle(getString(R.string.alert_title_delete));
-                builder.setIcon(android.R.drawable.ic_dialog_alert);
-                builder.setMessage(getString(R.string.alert_message_delete_note));
-                builder.setPositiveButton(android.R.string.ok,
-                        new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
-                                deleteCurrentNote();
-                                finish();
-                            }
-                        });
-                builder.setNegativeButton(android.R.string.cancel, null);
-                builder.show();
-                break;
-            case R.id.menu_font_size:
-                mFontSizeSelector.setVisibility(View.VISIBLE);
-                findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
-                break;
-            case R.id.menu_list_mode:
-                mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
-                        TextNote.MODE_CHECK_LIST : 0);
-                break;
-            case R.id.menu_share:
-                getWorkingText();
-                sendTo(this, mWorkingNote.getContent());
-                break;
-            case R.id.menu_send_to_desktop:
-                sendToDesktop();
-                break;
-            case R.id.menu_alert:
-                setReminder();
-                break;
-            case R.id.menu_delete_remind:
-                mWorkingNote.setAlertDate(0, false);
-                break;
-            default:
-                break;
+        int id = item.getItemId();
+        if (id == R.id.menu_new_note) {
+            createNewNote();
+        } else if (id == R.id.menu_delete) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle(getString(R.string.alert_title_delete));
+            builder.setIcon(android.R.drawable.ic_dialog_alert);
+            builder.setMessage(getString(R.string.alert_message_delete_note));
+            builder.setPositiveButton(android.R.string.ok,
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            deleteCurrentNote();
+                            finish();
+                        }
+                    });
+            builder.setNegativeButton(android.R.string.cancel, null);
+            builder.show();
+        } else if (id == R.id.menu_font_size) {
+            mFontSizeSelector.setVisibility(View.VISIBLE);
+            findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
+        } else if (id == R.id.menu_list_mode) {
+            mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
+                    TextNote.MODE_CHECK_LIST : 0);
+        } else if (id == R.id.menu_history) {
+            // 本次维护新增：打开历史版本列表，支持把任意旧版本回滚到编辑区
+            showHistoryDialog();
+        } else if (id == R.id.menu_share) {
+            getWorkingText();
+            sendTo(this, mWorkingNote.getContent());
+        } else if (id == R.id.menu_send_to_desktop) {
+            sendToDesktop();
+        } else if (id == R.id.menu_alert) {
+            setReminder();
+        } else if (id == R.id.menu_delete_remind) {
+            mWorkingNote.setAlertDate(0, false);
         }
         return true;
+    }
+
+    /**
+     * 本次维护新增：弹出当前便签的历史版本列表。
+     * 按归档时间由新到旧展示“时间 + 摘要”，点击某一版本后可将其正文回滚到编辑区；
+     * 历史数据通过 Notes.CONTENT_HISTORY_URI 查询，条数上限与过期版本清理由 NotesProvider 负责。
+     */
+    private void showHistoryDialog() {
+        if (!mWorkingNote.existInDatabase()) {
+            showToast(R.string.history_empty);
+            return;
+        }
+        final String[] versionContents = new String[HistoryPolicy.MAX_VERSIONS_PER_NOTE];
+        final String[] items = new String[HistoryPolicy.MAX_VERSIONS_PER_NOTE];
+        int size = 0;
+
+        Cursor cursor = getContentResolver().query(Notes.CONTENT_HISTORY_URI,
+                new String[] { Notes.HistoryColumns.ID, Notes.HistoryColumns.CONTENT,
+                        Notes.HistoryColumns.SNIPPET, Notes.HistoryColumns.SAVED_DATE },
+                Notes.HistoryColumns.NOTE_ID + "=?",
+                new String[] { String.valueOf(mWorkingNote.getNoteId()) },
+                Notes.HistoryColumns.SAVED_DATE + " DESC, " + Notes.HistoryColumns.ID + " DESC");
+        if (cursor != null) {
+            try {
+                while (cursor.moveToNext() && size < HistoryPolicy.MAX_VERSIONS_PER_NOTE) {
+                    versionContents[size] = cursor.getString(1);
+                    String snippet = cursor.getString(2);
+                    String time = DateFormat.getDateTimeInstance(DateFormat.SHORT,
+                            DateFormat.SHORT).format(new Date(cursor.getLong(3)));
+                    items[size] = getString(R.string.history_item_format, time, snippet);
+                    size++;
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+
+        if (size == 0) {
+            showToast(R.string.history_empty, Toast.LENGTH_LONG);
+            return;
+        }
+
+        final int itemCount = size;
+        final String[] shownItems = new String[itemCount];
+        System.arraycopy(items, 0, shownItems, 0, itemCount);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.history_dialog_title);
+        builder.setIcon(android.R.drawable.ic_menu_recent_history);
+        builder.setItems(shownItems, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                if (which < 0 || which >= itemCount) {
+                    return;
+                }
+                final String content = versionContents[which] == null ? "" : versionContents[which];
+                new AlertDialog.Builder(NoteEditActivity.this)
+                        .setTitle(R.string.history_dialog_title)
+                        .setMessage(R.string.history_restore_confirm)
+                        .setPositiveButton(android.R.string.ok,
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int id) {
+                                        restoreFromHistory(content);
+                                    }
+                                })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
+    }
+
+    /**
+     * 本次维护新增：把指定历史版本的正文回滚到编辑区，并同步更新工作便签模型。
+     * 清单模式下重建清单行视图，普通模式下直接替换编辑框文本，便于用户在该版本基础上继续修改。
+     *
+     * @param content 历史版本正文
+     */
+    private void restoreFromHistory(String content) {
+        String safeContent = content == null ? "" : content;
+        if (mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+            mWorkingNote.setWorkingText(safeContent);
+            switchToListMode(safeContent);
+        } else {
+            mNoteEditor.setText(getHighlightQueryResult(safeContent, mUserQuery));
+            // 本次维护新增：历史版本回滚后重新渲染正文图片
+            attachImagesToEditor();
+            mWorkingNote.setWorkingText(safeContent);
+        }
+        updateWordCount();
+        showToast(R.string.history_restored);
     }
 
     /**
@@ -643,7 +1164,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         DateTimePickerDialog d = new DateTimePickerDialog(this, System.currentTimeMillis());
         d.setOnDateTimeSetListener(new OnDateTimeSetListener() {
             public void OnDateTimeSet(AlertDialog dialog, long date) {
-                mWorkingNote.setAlertDate(date	, true);
+                mWorkingNote.setAlertDate(date, true);
             }
         });
         d.show();
@@ -679,7 +1200,9 @@ public class NoteEditActivity extends Activity implements OnClickListener,
     }
 
     /**
-     * 删除当前正在编辑的便签：未开启云同步时直接物理删除；开启云同步时移入系统回收站文件夹，并标记为已删除。
+     * 删除当前正在编辑的便签。
+     * 本次维护调整：不再区分是否开启云同步，统一执行软删除（移入系统回收站），
+     * 用户可在列表的回收站目录中恢复该便签或彻底删除。
      */
     private void deleteCurrentNote() {
         if (mWorkingNote.existInDatabase()) {
@@ -690,24 +1213,12 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             } else {
                 Log.d(TAG, "Wrong note id, should not happen");
             }
-            if (!isSyncMode()) {
-                if (!DataUtils.batchDeleteNotes(getContentResolver(), ids)) {
-                    Log.e(TAG, "Delete Note error");
-                }
-            } else {
-                if (!DataUtils.batchMoveToFolder(getContentResolver(), ids, Notes.ID_TRASH_FOLER)) {
-                    Log.e(TAG, "Move notes to trash folder error, should not happens");
-                }
+            if (!DataUtils.moveNotesToTrash(getContentResolver(), ids)) {
+                Log.e(TAG, "Move Note to trash error");
             }
+            showToast(R.string.info_note_moved_to_trash, Toast.LENGTH_SHORT);
         }
         mWorkingNote.markDeleted(true);
-    }
-
-    /**
-     * 判断应用当前是否已绑定 Google 同步账号（处于云同步模式）。
-     */
-    private boolean isSyncMode() {
-        return NotesPreferenceActivity.getSyncAccountName(this).trim().length() > 0;
     }
 
     /**
@@ -823,12 +1334,16 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     /**
      * 使用正则表达式在便签正文中查找所有匹配搜索关键词 userQuery 的片段，并添加高亮背景色 Span。
+     * 本次维护修复两处缺陷：①关键词可能包含 '('、'*'、'?'、'[' 等正则元字符，使用
+     * {@link Pattern#quote} 将其作为字面量转义，避免抛出 PatternSyntaxException；
+     * ②正文为 null 时统一按空串处理，避免 Matcher 空指针异常。
      */
     private Spannable getHighlightQueryResult(String fullText, String userQuery) {
-        SpannableString spannable = new SpannableString(fullText == null ? "" : fullText);
+        String safeText = fullText == null ? "" : fullText;
+        SpannableString spannable = new SpannableString(safeText);
         if (!TextUtils.isEmpty(userQuery)) {
-            mPattern = Pattern.compile(userQuery);
-            Matcher m = mPattern.matcher(fullText);
+            mPattern = Pattern.compile(Pattern.quote(userQuery));
+            Matcher m = mPattern.matcher(safeText);
             int start = 0;
             while (m.find(start)) {
                 spannable.setSpan(
@@ -902,6 +1417,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
                         ""));
             }
             mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
+            // 本次维护新增：从清单模式切回普通模式后重新渲染正文图片
+            attachImagesToEditor();
             mEditTextList.setVisibility(View.GONE);
             mNoteEditor.setVisibility(View.VISIBLE);
         }
@@ -933,7 +1450,29 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         } else {
             mWorkingNote.setWorkingText(mNoteEditor.getText().toString());
         }
+        // 本次维护新增：清单文本收集完成后刷新字数统计
+        updateWordCount();
         return hasChecked;
+    }
+
+    /**
+     * 本次维护新增：根据当前编辑内容刷新标题栏字数统计。
+     * 清单模式统计已收集到模型中的文本，普通模式直接统计编辑框当前文本；空白字符不计入字数。
+     */
+    private void updateWordCount() {
+        if (mWordCountView == null) {
+            return;
+        }
+        String text;
+        if (mWorkingNote != null
+                && mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+            text = mWorkingNote.getContent();
+        } else {
+            text = mNoteEditor != null ? mNoteEditor.getText().toString() : "";
+        }
+        // 本次维护新增：图片标记不算正文字数，统计前统一替换为占位
+        mWordCountView.setText(getString(R.string.word_count_format,
+                NoteTextUtils.countChars(NoteImageUtils.stripMarkers(text))));
     }
 
     /**

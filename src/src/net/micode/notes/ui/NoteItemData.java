@@ -32,7 +32,7 @@ import net.micode.notes.tool.DataUtils;
  * 对通话便签关联查询电话号码与通讯录联系人姓名，并计算该项在列表中的首/中/末/紧随文件夹位置状态。
  */
 public class NoteItemData {
-    // 便签主列表查询 note 表时使用的 12 列字段投影数组及下方对应的游标列索引常量
+    // 便签主列表查询 note 表时使用的 13 列字段投影数组及下方对应的游标列索引常量
     static final String [] PROJECTION = new String [] {
         NoteColumns.ID,
         NoteColumns.ALERTED_DATE,
@@ -46,6 +46,10 @@ public class NoteItemData {
         NoteColumns.TYPE,
         NoteColumns.WIDGET_ID,
         NoteColumns.WIDGET_TYPE,
+        NoteColumns.DELETED_DATE,
+        // 本次维护新增：置顶标记与标签，用于列表排序与展示
+        NoteColumns.PINNED,
+        NoteColumns.TAG_LABEL,
     };
 
     private static final int ID_COLUMN                    = 0;
@@ -60,6 +64,10 @@ public class NoteItemData {
     private static final int TYPE_COLUMN                  = 9;
     private static final int WIDGET_ID_COLUMN             = 10;
     private static final int WIDGET_TYPE_COLUMN           = 11;
+    private static final int DELETED_DATE_COLUMN          = 12;
+    // 本次维护新增：置顶标记与标签在投影中的列索引
+    private static final int PINNED_COLUMN                = 13;
+    private static final int TAG_COLUMN                   = 14;
 
     private long mId;
     private long mAlertDate;
@@ -73,8 +81,12 @@ public class NoteItemData {
     private int mType;
     private int mWidgetId;
     private int mWidgetType;
+    private long mDeletedDate;
     private String mName;
     private String mPhoneNumber;
+    // 本次维护新增：是否置顶、所属标签
+    private boolean mPinned;
+    private String mTag;
 
     // 列表项相对位置状态标志（末项、首项、唯一项、文件夹后唯一便签、文件夹后首条多便签），用于选择圆角拼接背景
     private boolean mIsLastItem;
@@ -104,6 +116,11 @@ public class NoteItemData {
         mType = cursor.getInt(TYPE_COLUMN);
         mWidgetId = cursor.getInt(WIDGET_ID_COLUMN);
         mWidgetType = cursor.getInt(WIDGET_TYPE_COLUMN);
+        mDeletedDate = cursor.getLong(DELETED_DATE_COLUMN);
+        // 本次维护新增：读取置顶标记与标签
+        mPinned = cursor.getInt(PINNED_COLUMN) > 0;
+        String tag = cursor.getString(TAG_COLUMN);
+        mTag = tag == null ? "" : tag;
 
         mPhoneNumber = "";
         // 若属于通话便签目录，进一步查出电话号码并尝试匹配系统通讯录姓名（未匹配则直接显示号码）
@@ -206,6 +223,20 @@ public class NoteItemData {
         return mModifiedDate;
     }
 
+    /**
+     * 本次维护新增：获取便签进入回收站的时间戳（毫秒），0 表示不在回收站中。
+     */
+    public long getDeletedDate() {
+        return mDeletedDate;
+    }
+
+    /**
+     * 本次维护新增：判断该便签当前是否位于回收站目录中。
+     */
+    public boolean isInTrash() {
+        return mParentId == Notes.ID_TRASH_FOLER;
+    }
+
     // 获取便签背景颜色编号
     public int getBgColorId() {
         return mBgColorId;
@@ -249,6 +280,20 @@ public class NoteItemData {
     // 判断该便签是否设置了有效闹钟提醒
     public boolean hasAlert() {
         return (mAlertDate > 0);
+    }
+
+    /**
+     * 本次维护新增：判断该便签是否已置顶。
+     */
+    public boolean isPinned() {
+        return mPinned;
+    }
+
+    /**
+     * 本次维护新增：获取便签标签，未打标签时返回空串。
+     */
+    public String getTag() {
+        return mTag;
     }
 
     // 判断该记录是否为有效的通话便签记录
