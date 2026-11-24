@@ -50,6 +50,20 @@ public class NoteItemData {
         // 本次维护新增：置顶标记与标签，用于列表排序与展示
         NoteColumns.PINNED,
         NoteColumns.TAG_LABEL,
+            NoteColumns.ID,
+            NoteColumns.ALERTED_DATE,
+            NoteColumns.BG_COLOR_ID,
+            NoteColumns.CREATED_DATE,
+            NoteColumns.HAS_ATTACHMENT,
+            NoteColumns.MODIFIED_DATE,
+            NoteColumns.NOTES_COUNT,
+            NoteColumns.PARENT_ID,
+            NoteColumns.SNIPPET,
+            NoteColumns.TYPE,
+            NoteColumns.WIDGET_ID,
+            NoteColumns.WIDGET_TYPE,
+            NoteColumns.PINNED,
+            NoteColumns.PASSWORD,
     };
 
     private static final int ID_COLUMN                    = 0;
@@ -64,6 +78,8 @@ public class NoteItemData {
     private static final int TYPE_COLUMN                  = 9;
     private static final int WIDGET_ID_COLUMN             = 10;
     private static final int WIDGET_TYPE_COLUMN           = 11;
+    private static final int PINNED_COLUMN                = 12;
+    private static final int PASSWORD_COLUMN              = 13;
     private static final int DELETED_DATE_COLUMN          = 12;
     // 本次维护新增：置顶标记与标签在投影中的列索引
     private static final int PINNED_COLUMN                = 13;
@@ -94,6 +110,8 @@ public class NoteItemData {
     private boolean mIsOnlyOneItem;
     private boolean mIsOneNoteFollowingFolder;
     private boolean mIsMultiNotesFollowingFolder;
+    private int mPinned;
+    private boolean mHasPassword;
 
     /**
      * 从当前游标行构造列表项数据对象：解析基本属性、去除清单勾选标签、解析通话联系人，并计算位置标志。
@@ -121,6 +139,9 @@ public class NoteItemData {
         mPinned = cursor.getInt(PINNED_COLUMN) > 0;
         String tag = cursor.getString(TAG_COLUMN);
         mTag = tag == null ? "" : tag;
+        mPinned = cursor.getInt(PINNED_COLUMN);
+        String passwordStr = cursor.getString(PASSWORD_COLUMN);
+        mHasPassword = !TextUtils.isEmpty(passwordStr);
 
         mPhoneNumber = "";
         // 若属于通话便签目录，进一步查出电话号码并尝试匹配系统通讯录姓名（未匹配则直接显示号码）
@@ -304,5 +325,29 @@ public class NoteItemData {
     // 静态工具方法：直接从游标当前行读取节点类型列
     public static int getNoteType(Cursor cursor) {
         return cursor.getInt(TYPE_COLUMN);
+    }
+
+    /**
+     * Check if this note is pinned to the top
+     * @return true if pinned
+     */
+    public boolean isPinned() {
+        return mPinned == 1;
+    }
+
+    /**
+     * Get the pinned value
+     * @return 1 if pinned, 0 if not
+     */
+    public int getPinned() {
+        return mPinned;
+    }
+
+    /**
+     * Check if this note has a password lock
+     * @return true if password protected
+     */
+    public boolean hasPassword() {
+        return mHasPassword;
     }
 }

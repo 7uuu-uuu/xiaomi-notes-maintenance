@@ -294,6 +294,19 @@ public class Notes {
          */
         // 该版本被归档的时间戳（单位：毫秒）
         public static final String SAVED_DATE = "saved_date";
+
+        /**
+         * Whether the note is pinned to the top of the list.
+         * 1 means pinned, 0 means not pinned.
+         * <P> Type : INTEGER </P>
+         */
+        public static final String PINNED = "pinned";
+
+        /**
+         * The password hash for locking a note. Empty string means no lock.
+         * <P> Type : TEXT </P>
+         */
+        public static final String PASSWORD = "password";
     }
 
     /**

@@ -1462,7 +1462,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                         values.put(NoteColumns.LOCAL_MODIFIED, 1);
                         mContentResolver.update(Notes.CONTENT_NOTE_URI, values, NoteColumns.ID
                                 + "=?", new String[] {
-                                String.valueOf(mFocusNoteDataItem.getId())
+                            String.valueOf(mFocusNoteDataItem.getId())
                         });
                     }
                 } else if (!TextUtils.isEmpty(name)) {

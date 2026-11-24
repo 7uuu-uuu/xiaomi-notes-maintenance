@@ -37,6 +37,10 @@
         android:id="@+id/menu_search"
         android:title="@string/menu_search"/>
 
+    <item
+        android:id="@+id/menu_trash"
+        android:title="@string/menu_trash"/>
+
     <!-- 本次维护新增：排序方式与按标签筛选入口 -->
     <item
         android:id="@+id/menu_sort"

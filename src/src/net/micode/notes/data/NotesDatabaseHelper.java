@@ -49,8 +49,6 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
         public static final String NOTE = "note";
 
         public static final String DATA = "data";
-
-        public static final String HISTORY = "note_history";
     }
 
     private static final String TAG = "NotesDatabaseHelper";
@@ -291,8 +289,7 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     /**
      * Move notes belong to folder which has been moved to trash folder
      */
-    // 触发器：将文件夹移入回收站时，自动将该文件夹下的所有便签一并移入回收站，
-    // 并同步写入这些子便签的删除时间（SQLite 默认不级联触发器，故在此显式赋值）
+    // 触发器：将文件夹移入回收站时，自动将该文件夹下的所有便签一并移入回收站
     private static final String FOLDER_MOVE_NOTES_ON_TRASH_TRIGGER =
         "CREATE TRIGGER folder_move_notes_on_trash " +
         " AFTER UPDATE ON " + TABLE.NOTE +
@@ -345,7 +342,7 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * 先删除旧触发器再重新创建 note 表关联的全部 11 个触发器，确保触发逻辑为最新版本。
+     * 先删除旧触发器再重新创建 note 表关联的全部 7 个触发器，确保触发逻辑为最新版本。
      *
      * @param db 可写的 SQLiteDatabase 数据库实例
      */
