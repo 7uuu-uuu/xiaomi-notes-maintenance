@@ -38,11 +38,19 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 
 
+/**
+ * 云同步专用的本地 note 表记录（便签或文件夹）映射封装类。
+ * 聚合一条 note 表主记录及其下属的多条 SqlData 数据记录（mDataList），
+ * 负责在 Google Task 双向同步中完成本地 SQLite 记录与同步 JSON 结构的相互转换、
+ * 差异追踪（mDiffNoteValues）以及带版本号保护的事务性落库提交。
+ */
 public class SqlNote {
     private static final String TAG = SqlNote.class.getSimpleName();
 
+    // 新建记录尚未分配数据库主键时的占位 ID
     private static final int INVALID_ID = -99999;
 
+    // 同步查询 note 表全部 17 个字段的完整投影数组及下方对应的列索引常量
     public static final String[] PROJECTION_NOTE = new String[] {
             NoteColumns.ID, NoteColumns.ALERTED_DATE, NoteColumns.BG_COLOR_ID,
             NoteColumns.CREATED_DATE, NoteColumns.HAS_ATTACHMENT, NoteColumns.MODIFIED_DATE,
@@ -90,6 +98,7 @@ public class SqlNote {
 
     private ContentResolver mContentResolver;
 
+    // 标记当前对象是否为待插入数据库的新记录（true 为新建，false 为已有记录更新）
     private boolean mIsCreate;
 
     private long mId;
@@ -118,10 +127,17 @@ public class SqlNote {
 
     private long mVersion;
 
+    // 缓存 note 表各字段相对于数据库原值的增量变更
     private ContentValues mDiffNoteValues;
 
+    // 当前便签下属的所有 data 表子记录对象列表（文件夹类型时为空列表）
     private ArrayList<SqlData> mDataList;
 
+    /**
+     * 新建模式构造方法：用于在云端新增节点同步到本地时创建一个默认初始化的 SqlNote 对象。
+     *
+     * @param context 上下文对象
+     */
     public SqlNote(Context context) {
         mContext = context;
         mContentResolver = context.getContentResolver();
@@ -143,6 +159,12 @@ public class SqlNote {
         mDataList = new ArrayList<SqlData>();
     }
 
+    /**
+     * 游标加载构造方法：从已查询到的 note 表游标初始化对象，若为便签类型则继续加载 data 子表。
+     *
+     * @param context 上下文对象
+     * @param c       指向当前 note 记录的 Cursor 游标
+     */
     public SqlNote(Context context, Cursor c) {
         mContext = context;
         mContentResolver = context.getContentResolver();
@@ -154,6 +176,12 @@ public class SqlNote {
         mDiffNoteValues = new ContentValues();
     }
 
+    /**
+     * 主键加载构造方法：根据指定的 note 主键 ID 查询数据库并完整加载便签/文件夹及关联数据。
+     *
+     * @param context 上下文对象
+     * @param id      目标便签或文件夹的数据库主键 ID
+     */
     public SqlNote(Context context, long id) {
         mContext = context;
         mContentResolver = context.getContentResolver();
@@ -166,6 +194,11 @@ public class SqlNote {
 
     }
 
+    /**
+     * 根据主键 ID 查询 note 表并将游标交由重载方法 loadFromCursor(Cursor) 解析字段。
+     *
+     * @param id note 表记录主键 ID
+     */
     private void loadFromCursor(long id) {
         Cursor c = null;
         try {
@@ -185,6 +218,11 @@ public class SqlNote {
         }
     }
 
+    /**
+     * 从 note 表游标当前行依次读取 ID、提醒时间、背景色、创建/修改时间、父目录、摘要、类型、小部件及版本号。
+     *
+     * @param c note 表查询游标
+     */
     private void loadFromCursor(Cursor c) {
         mId = c.getLong(ID_COLUMN);
         mAlertDate = c.getLong(ALERTED_DATE_COLUMN);
@@ -200,6 +238,9 @@ public class SqlNote {
         mVersion = c.getLong(VERSION_COLUMN);
     }
 
+    /**
+     * 查询 data 表中所有 note_id 等于当前 mId 的子记录，封装为 SqlData 对象存入 mDataList。
+     */
     private void loadDataContent() {
         Cursor c = null;
         mDataList.clear();
@@ -226,11 +267,19 @@ public class SqlNote {
         }
     }
 
+    /**
+     * 使用云端节点转换生成的本地格式 JSON 对象更新当前 SqlNote 及其子 SqlData 列表。
+     * 系统目录拒绝修改；用户文件夹仅更新名称与类型；普通便签全量比对 12 项属性及 data 子数组。
+     *
+     * @param js 包含 meta_note 和（可选）meta_data 的 JSON 对象
+     * @return 解析并更新成功返回 true；JSON 格式异常返回 false
+     */
     public boolean setContent(JSONObject js) {
         try {
             JSONObject note = js.getJSONObject(GTaskStringUtils.META_HEAD_NOTE);
             if (note.getInt(NoteColumns.TYPE) == Notes.TYPE_SYSTEM) {
                 Log.w(TAG, "cannot set system folder");
+            // 文件夹类型：仅对比并记录文件夹名称（snippet）和类型（type）的差异
             } else if (note.getInt(NoteColumns.TYPE) == Notes.TYPE_FOLDER) {
                 // for folder we can only update the snnipet and type
                 String snippet = note.has(NoteColumns.SNIPPET) ? note
@@ -246,6 +295,7 @@ public class SqlNote {
                     mDiffNoteValues.put(NoteColumns.TYPE, type);
                 }
                 mType = type;
+            // 普通便签类型：逐项对比 note 元数据属性差异，并按 dataId 匹配更新或新增 SqlData 子项
             } else if (note.getInt(NoteColumns.TYPE) == Notes.TYPE_NOTE) {
                 JSONArray dataArray = js.getJSONArray(GTaskStringUtils.META_HEAD_DATA);
                 long id = note.has(NoteColumns.ID) ? note.getLong(NoteColumns.ID) : INVALID_ID;
@@ -331,6 +381,7 @@ public class SqlNote {
                 }
                 mOriginParent = originParent;
 
+                // 遍历 meta_data 数组：若本地已有同 ID 的 SqlData 则就地更新，否则新建 SqlData 加入列表
                 for (int i = 0; i < dataArray.length(); i++) {
                     JSONObject data = dataArray.getJSONObject(i);
                     SqlData sqlData = null;
@@ -359,6 +410,11 @@ public class SqlNote {
         return true;
     }
 
+    /**
+     * 将当前已落库的 SqlNote 导出为包含 meta_note 和 meta_data 的 JSON 对象，供上传至云端使用。
+     *
+     * @return 序列化后的 JSONObject；未落库或发生 JSON 异常时返回 null
+     */
     public JSONObject getContent() {
         try {
             JSONObject js = new JSONObject();
@@ -407,40 +463,54 @@ public class SqlNote {
         return null;
     }
 
+    // 设置所属父文件夹 ID 并记入待提交差异集
     public void setParentId(long id) {
         mParentId = id;
         mDiffNoteValues.put(NoteColumns.PARENT_ID, id);
     }
 
+    // 绑定对应的 Google Task 云端 gid 并记入待提交差异集
     public void setGtaskId(String gid) {
         mDiffNoteValues.put(NoteColumns.GTASK_ID, gid);
     }
 
+    // 更新最近同步基准时间戳（sync_id）并记入待提交差异集
     public void setSyncId(long syncId) {
         mDiffNoteValues.put(NoteColumns.SYNC_ID, syncId);
     }
 
+    // 同步完成后将本地修改标志 local_modified 清零
     public void resetLocalModified() {
         mDiffNoteValues.put(NoteColumns.LOCAL_MODIFIED, 0);
     }
 
+    // 获取当前记录的数据库主键 ID
     public long getId() {
         return mId;
     }
 
+    // 获取当前记录所属父文件夹 ID
     public long getParentId() {
         return mParentId;
     }
 
+    // 获取便签摘要或文件夹名称
     public String getSnippet() {
         return mSnippet;
     }
 
+    // 判断当前记录是否为普通便签类型（TYPE_NOTE）
     public boolean isNoteType() {
         return mType == Notes.TYPE_NOTE;
     }
 
+    /**
+     * 将当前 SqlNote 及下属所有 SqlData 的增量改动提交至本地 SQLite 数据库，并在提交后重新加载刷新内存状态。
+     *
+     * @param validateVersion 更新已有记录时是否校验 version 版本号（防止覆盖同步过程中用户的新修改）
+     */
     public void commit(boolean validateVersion) {
+        // 新建分支：先向 note 表插入主记录获取新 mId，再逐条插入下属 SqlData 子记录
         if (mIsCreate) {
             if (mId == INVALID_ID && mDiffNoteValues.containsKey(NoteColumns.ID)) {
                 mDiffNoteValues.remove(NoteColumns.ID);
@@ -467,6 +537,7 @@ public class SqlNote {
                 Log.e(TAG, "No such note");
                 throw new IllegalStateException("Try to update note with invalid id");
             }
+            // 更新分支：先更新 note 表主记录（可选附带 version<=mVersion 条件），再提交所有 SqlData 子记录
             if (mDiffNoteValues.size() > 0) {
                 mVersion ++;
                 int result = 0;
