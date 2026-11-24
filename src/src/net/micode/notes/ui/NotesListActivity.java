@@ -89,10 +89,14 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
 
     private static final int MENU_FOLDER_CHANGE_NAME = 2;
 
+    private static final int MENU_TRASH_RESTORE = 3;
+
+    private static final int MENU_TRASH_DELETE = 4;
+
     private static final String PREFERENCE_ADD_INTRODUCTION = "net.micode.notes.introduction";
 
     private enum ListEditState {
-        NOTE_LIST, SUB_FOLDER, CALL_RECORD_FOLDER
+        NOTE_LIST, SUB_FOLDER, CALL_RECORD_FOLDER, TRASH_FOLDER
     };
 
     private ListEditState mState;
@@ -163,7 +167,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
             StringBuilder sb = new StringBuilder();
             InputStream in = null;
             try {
-                 in = getResources().openRawResource(R.raw.introduction);
+                in = getResources().openRawResource(R.raw.introduction);
                 if (in != null) {
                     InputStreamReader isr = new InputStreamReader(in);
                     BufferedReader br = new BufferedReader(isr);
@@ -307,7 +311,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
         }
 
         public void onItemCheckedStateChanged(ActionMode mode, int position, long id,
-                boolean checked) {
+                                              boolean checked) {
             mNotesListAdapter.setCheckedItem(position, checked);
             updateMenu();
         }
@@ -319,28 +323,25 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                 return true;
             }
 
-            switch (item.getItemId()) {
-                case R.id.delete:
-                    AlertDialog.Builder builder = new AlertDialog.Builder(NotesListActivity.this);
-                    builder.setTitle(getString(R.string.alert_title_delete));
-                    builder.setIcon(android.R.drawable.ic_dialog_alert);
-                    builder.setMessage(getString(R.string.alert_message_delete_notes,
-                                             mNotesListAdapter.getSelectedCount()));
-                    builder.setPositiveButton(android.R.string.ok,
-                                             new DialogInterface.OnClickListener() {
-                                                 public void onClick(DialogInterface dialog,
-                                                         int which) {
-                                                     batchDelete();
-                                                 }
-                                             });
-                    builder.setNegativeButton(android.R.string.cancel, null);
-                    builder.show();
-                    break;
-                case R.id.move:
-                    startQueryDestinationFolders();
-                    break;
-                default:
-                    return false;
+            int itemId = item.getItemId();
+            if (itemId == R.id.delete) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(NotesListActivity.this);
+                builder.setTitle(getString(R.string.alert_title_delete));
+                builder.setIcon(android.R.drawable.ic_dialog_alert);
+                builder.setMessage(getString(R.string.alert_message_delete_notes,
+                        mNotesListAdapter.getSelectedCount()));
+                builder.setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                batchDelete();
+                            }
+                        });
+                builder.setNegativeButton(android.R.string.cancel, null);
+                builder.show();
+            } else if (itemId == R.id.move) {
+                startQueryDestinationFolders();
+            } else {
+                return false;
             }
             return true;
         }
@@ -409,12 +410,19 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     };
 
     private void startAsyncNotesListQuery() {
-        String selection = (mCurrentFolderId == Notes.ID_ROOT_FOLDER) ? ROOT_FOLDER_SELECTION
-                : NORMAL_SELECTION;
+        String selection;
+        if (mCurrentFolderId == Notes.ID_ROOT_FOLDER) {
+            selection = ROOT_FOLDER_SELECTION;
+        } else if (mCurrentFolderId == Notes.ID_TRASH_FOLER) {
+            // For trash folder, show all notes in trash
+            selection = NoteColumns.PARENT_ID + "=?";
+        } else {
+            selection = NORMAL_SELECTION;
+        }
         mBackgroundQueryHandler.startQuery(FOLDER_NOTE_LIST_QUERY_TOKEN, null,
                 Notes.CONTENT_NOTE_URI, NoteItemData.PROJECTION, selection, new String[] {
-                    String.valueOf(mCurrentFolderId)
-                }, NoteColumns.TYPE + " DESC," + NoteColumns.MODIFIED_DATE + " DESC");
+                        String.valueOf(mCurrentFolderId)
+                }, NoteColumns.PINNED + " DESC," + NoteColumns.TYPE + " DESC," + NoteColumns.MODIFIED_DATE + " DESC");
     }
 
     private final class BackgroundQueryHandler extends AsyncQueryHandler {
@@ -473,20 +481,11 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
         new AsyncTask<Void, Void, HashSet<AppWidgetAttribute>>() {
             protected HashSet<AppWidgetAttribute> doInBackground(Void... unused) {
                 HashSet<AppWidgetAttribute> widgets = mNotesListAdapter.getSelectedWidget();
-                if (!isSyncMode()) {
-                    // if not synced, delete notes directly
-                    if (DataUtils.batchDeleteNotes(mContentResolver, mNotesListAdapter
-                            .getSelectedItemIds())) {
-                    } else {
-                        Log.e(TAG, "Delete notes error, should not happens");
-                    }
-                } else {
-                    // in sync mode, we'll move the deleted note into the trash
-                    // folder
-                    if (!DataUtils.batchMoveToFolder(mContentResolver, mNotesListAdapter
-                            .getSelectedItemIds(), Notes.ID_TRASH_FOLER)) {
-                        Log.e(TAG, "Move notes to trash folder error, should not happens");
-                    }
+                // Always move to trash folder instead of permanent delete
+                // This allows users to restore notes from the trash
+                if (!DataUtils.batchMoveToFolder(mContentResolver, mNotesListAdapter
+                        .getSelectedItemIds(), Notes.ID_TRASH_FOLER)) {
+                    Log.e(TAG, "Move notes to trash folder error, should not happens");
                 }
                 return widgets;
             }
@@ -534,9 +533,56 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     }
 
     private void openNode(NoteItemData data) {
+        // Check if the note has a password lock
+        if (data.hasPassword()) {
+            // Show password dialog before opening the note
+            // We need to query the actual password from the database
+            final long noteId = data.getId();
+            Cursor cursor = mContentResolver.query(
+                    Notes.CONTENT_NOTE_URI,
+                    new String[] { NoteColumns.PASSWORD },
+                    NoteColumns.ID + "=?",
+                    new String[] { String.valueOf(noteId) },
+                    null);
+            String password = "";
+            if (cursor != null) {
+                if (cursor.moveToFirst()) {
+                    password = cursor.getString(0);
+                }
+                cursor.close();
+            }
+
+            if (TextUtils.isEmpty(password)) {
+                // No password, open directly (should not happen if hasPassword is true)
+                doOpenNode(noteId);
+                return;
+            }
+
+            final String correctPassword = password;
+            PasswordDialog dialog = new PasswordDialog(this, correctPassword,
+                    new PasswordDialog.OnPasswordVerifiedListener() {
+                        public void onVerified() {
+                            doOpenNode(noteId);
+                        }
+                        public void onCancelled() {
+                            // User cancelled, do nothing
+                        }
+                    });
+            dialog.show();
+        } else {
+            doOpenNode(data.getId());
+        }
+    }
+
+    /**
+     * Actually open the note edit activity with the given note ID.
+     * Called after password verification passes or if note has no password.
+     * @param noteId the ID of the note to open
+     */
+    private void doOpenNode(long noteId) {
         Intent intent = new Intent(this, NoteEditActivity.class);
         intent.setAction(Intent.ACTION_VIEW);
-        intent.putExtra(Intent.EXTRA_UID, data.getId());
+        intent.putExtra(Intent.EXTRA_UID, noteId);
         this.startActivityForResult(intent, REQUEST_CODE_OPEN_NODE);
     }
 
@@ -558,12 +604,9 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     }
 
     public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.btn_new_note:
-                createNewNote();
-                break;
-            default:
-                break;
+        int id = v.getId();
+        if (id == R.id.btn_new_note) {
+            createNewNote();
         }
     }
 
@@ -624,7 +667,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                         values.put(NoteColumns.LOCAL_MODIFIED, 1);
                         mContentResolver.update(Notes.CONTENT_NOTE_URI, values, NoteColumns.ID
                                 + "=?", new String[] {
-                            String.valueOf(mFocusNoteDataItem.getId())
+                                String.valueOf(mFocusNoteDataItem.getId())
                         });
                     }
                 } else if (!TextUtils.isEmpty(name)) {
@@ -666,25 +709,25 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
 
     @Override
     public void onBackPressed() {
-        switch (mState) {
-            case SUB_FOLDER:
-                mCurrentFolderId = Notes.ID_ROOT_FOLDER;
-                mState = ListEditState.NOTE_LIST;
-                startAsyncNotesListQuery();
-                mTitleBar.setVisibility(View.GONE);
-                break;
-            case CALL_RECORD_FOLDER:
-                mCurrentFolderId = Notes.ID_ROOT_FOLDER;
-                mState = ListEditState.NOTE_LIST;
-                mAddNewNote.setVisibility(View.VISIBLE);
-                mTitleBar.setVisibility(View.GONE);
-                startAsyncNotesListQuery();
-                break;
-            case NOTE_LIST:
-                super.onBackPressed();
-                break;
-            default:
-                break;
+        if (mState == ListEditState.SUB_FOLDER) {
+            mCurrentFolderId = Notes.ID_ROOT_FOLDER;
+            mState = ListEditState.NOTE_LIST;
+            startAsyncNotesListQuery();
+            mTitleBar.setVisibility(View.GONE);
+        } else if (mState == ListEditState.CALL_RECORD_FOLDER) {
+            mCurrentFolderId = Notes.ID_ROOT_FOLDER;
+            mState = ListEditState.NOTE_LIST;
+            mAddNewNote.setVisibility(View.VISIBLE);
+            mTitleBar.setVisibility(View.GONE);
+            startAsyncNotesListQuery();
+        } else if (mState == ListEditState.TRASH_FOLDER) {
+            mCurrentFolderId = Notes.ID_ROOT_FOLDER;
+            mState = ListEditState.NOTE_LIST;
+            mAddNewNote.setVisibility(View.VISIBLE);
+            mTitleBar.setVisibility(View.GONE);
+            startAsyncNotesListQuery();
+        } else if (mState == ListEditState.NOTE_LIST) {
+            super.onBackPressed();
         }
     }
 
@@ -700,7 +743,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
         }
 
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, new int[] {
-            appWidgetId
+                appWidgetId
         });
 
         sendBroadcast(intent);
@@ -732,11 +775,11 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
             Log.e(TAG, "The long click data item is null");
             return false;
         }
-        switch (item.getItemId()) {
-            case MENU_FOLDER_VIEW:
+        try {
+            int itemId = item.getItemId();
+            if (itemId == MENU_FOLDER_VIEW) {
                 openFolder(mFocusNoteDataItem);
-                break;
-            case MENU_FOLDER_DELETE:
+            } else if (itemId == MENU_FOLDER_DELETE) {
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
                 builder.setTitle(getString(R.string.alert_title_delete));
                 builder.setIcon(android.R.drawable.ic_dialog_alert);
@@ -749,15 +792,102 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                         });
                 builder.setNegativeButton(android.R.string.cancel, null);
                 builder.show();
-                break;
-            case MENU_FOLDER_CHANGE_NAME:
+            } else if (itemId == MENU_FOLDER_CHANGE_NAME) {
                 showCreateOrModifyFolderDialog(false);
-                break;
-            default:
-                break;
+            } else if (itemId == MENU_TRASH_RESTORE) {
+                restoreNoteFromTrash(mFocusNoteDataItem.getId());
+            } else if (itemId == MENU_TRASH_DELETE) {
+                permanentlyDeleteNote(mFocusNoteDataItem.getId());
+            } else {
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling context menu item", e);
+            return false;
         }
-
         return true;
+    }
+    /**
+     * Restore a note from the trash folder back to the root folder.
+     * The note's parent_id is changed from TRASH_FOLDER to ROOT_FOLDER.
+     * @param noteId the ID of the note to restore
+     */
+    private void restoreNoteFromTrash(long noteId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.menu_restore);
+        builder.setMessage(R.string.alert_message_restore);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                HashSet<Long> ids = new HashSet<Long>();
+                ids.add(mFocusNoteDataItem.getId());
+                if (DataUtils.batchMoveToFolder(mContentResolver, ids, Notes.ID_ROOT_FOLDER)) {
+                    Toast.makeText(NotesListActivity.this, R.string.toast_note_restored,
+                            Toast.LENGTH_SHORT).show();
+                    startAsyncNotesListQuery();
+                } else {
+                    Log.e(TAG, "Restore note from trash failed");
+                }
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
+    }
+
+    /**
+     * Permanently delete a note from the trash folder.
+     * This operation cannot be undone.
+     * @param noteId the ID of the note to permanently delete
+     */
+    private void permanentlyDeleteNote(long noteId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.menu_delete_permanently);
+        builder.setIcon(android.R.drawable.ic_dialog_alert);
+        builder.setMessage(R.string.alert_message_delete_permanently);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                HashSet<Long> ids = new HashSet<Long>();
+                ids.add(mFocusNoteDataItem.getId());
+                if (DataUtils.batchDeleteNotes(mContentResolver, ids)) {
+                    Toast.makeText(NotesListActivity.this, R.string.toast_note_deleted_permanently,
+                            Toast.LENGTH_SHORT).show();
+                    startAsyncNotesListQuery();
+                } else {
+                    Log.e(TAG, "Permanently delete note from trash failed");
+                }
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
+    }
+
+    /**
+     * Show AlertDialog for trash note actions (restore or permanently delete).
+     * This avoids the context menu recursion bug.
+     */
+    private void showTrashNoteActionsDialog() {
+        if (mFocusNoteDataItem == null) return;
+
+        final String[] options = {
+                getString(R.string.menu_restore),
+                getString(R.string.menu_delete_permanently)
+        };
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(mFocusNoteDataItem.getSnippet());
+        builder.setItems(options, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                if (which == 0) {
+                    // Restore
+                    restoreNoteFromTrash(mFocusNoteDataItem.getId());
+                } else if (which == 1) {
+                    // Permanently delete
+                    permanentlyDeleteNote(mFocusNoteDataItem.getId());
+                }
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
     }
 
     @Override
@@ -772,6 +902,15 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
             getMenuInflater().inflate(R.menu.sub_folder, menu);
         } else if (mState == ListEditState.CALL_RECORD_FOLDER) {
             getMenuInflater().inflate(R.menu.call_record_folder, menu);
+        } else if (mState == ListEditState.TRASH_FOLDER) {
+            getMenuInflater().inflate(R.menu.note_list, menu);
+            // Hide irrelevant menu items in trash
+            menu.findItem(R.id.menu_sync).setVisible(false);
+            menu.findItem(R.id.menu_new_folder).setVisible(false);
+            menu.findItem(R.id.menu_export_text).setVisible(false);
+            menu.findItem(R.id.menu_setting).setVisible(false);
+            menu.findItem(R.id.menu_search).setVisible(false);
+            menu.findItem(R.id.menu_trash).setVisible(false);
         } else {
             Log.e(TAG, "Wrong state:" + mState);
         }
@@ -780,42 +919,44 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_new_folder: {
-                showCreateOrModifyFolderDialog(true);
-                break;
-            }
-            case R.id.menu_export_text: {
-                exportNoteToText();
-                break;
-            }
-            case R.id.menu_sync: {
-                if (isSyncMode()) {
-                    if (TextUtils.equals(item.getTitle(), getString(R.string.menu_sync))) {
-                        GTaskSyncService.startSync(this);
-                    } else {
-                        GTaskSyncService.cancelSync(this);
-                    }
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_new_folder) {
+            showCreateOrModifyFolderDialog(true);
+        } else if (itemId == R.id.menu_export_text) {
+            exportNoteToText();
+        } else if (itemId == R.id.menu_sync) {
+            if (isSyncMode()) {
+                if (TextUtils.equals(item.getTitle(), getString(R.string.menu_sync))) {
+                    GTaskSyncService.startSync(this);
                 } else {
-                    startPreferenceActivity();
+                    GTaskSyncService.cancelSync(this);
                 }
-                break;
-            }
-            case R.id.menu_setting: {
+            } else {
                 startPreferenceActivity();
-                break;
             }
-            case R.id.menu_new_note: {
-                createNewNote();
-                break;
-            }
-            case R.id.menu_search:
-                onSearchRequested();
-                break;
-            default:
-                break;
+        } else if (itemId == R.id.menu_setting) {
+            startPreferenceActivity();
+        } else if (itemId == R.id.menu_new_note) {
+            createNewNote();
+        } else if (itemId == R.id.menu_search) {
+            onSearchRequested();
+        } else if (itemId == R.id.menu_trash) {
+            openTrashFolder();
         }
         return true;
+    }
+
+    /**
+     * Open the trash folder to show deleted notes.
+     * Notes in the trash can be restored to root folder or permanently deleted.
+     */
+    private void openTrashFolder() {
+        mCurrentFolderId = Notes.ID_TRASH_FOLER;
+        mState = ListEditState.TRASH_FOLDER;
+        startAsyncNotesListQuery();
+        mTitleBar.setText(R.string.trash_folder_name);
+        mTitleBar.setVisibility(View.VISIBLE);
+        mAddNewNote.setVisibility(View.GONE);
     }
 
     @Override
@@ -890,27 +1031,22 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                     return;
                 }
 
-                switch (mState) {
-                    case NOTE_LIST:
-                        if (item.getType() == Notes.TYPE_FOLDER
-                                || item.getType() == Notes.TYPE_SYSTEM) {
-                            openFolder(item);
-                        } else if (item.getType() == Notes.TYPE_NOTE) {
-                            openNode(item);
-                        } else {
-                            Log.e(TAG, "Wrong note type in NOTE_LIST");
-                        }
-                        break;
-                    case SUB_FOLDER:
-                    case CALL_RECORD_FOLDER:
-                        if (item.getType() == Notes.TYPE_NOTE) {
-                            openNode(item);
-                        } else {
-                            Log.e(TAG, "Wrong note type in SUB_FOLDER");
-                        }
-                        break;
-                    default:
-                        break;
+                if (mState == ListEditState.NOTE_LIST) {
+                    if (item.getType() == Notes.TYPE_FOLDER || item.getType() == Notes.TYPE_SYSTEM) {
+                        openFolder(item);
+                    } else if (item.getType() == Notes.TYPE_NOTE) {
+                        openNode(item);
+                    } else {
+                        Log.e(TAG, "Wrong note type in NOTE_LIST");
+                    }
+                } else if (mState == ListEditState.SUB_FOLDER || mState == ListEditState.CALL_RECORD_FOLDER) {
+                    if (item.getType() == Notes.TYPE_NOTE) {
+                        openNode(item);
+                    } else {
+                        Log.e(TAG, "Wrong note type in SUB_FOLDER");
+                    }
+                } else if (mState == ListEditState.TRASH_FOLDER) {
+                    Toast.makeText(NotesListActivity.this, R.string.menu_restore, Toast.LENGTH_SHORT).show();
                 }
             }
         }
@@ -920,7 +1056,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     private void startQueryDestinationFolders() {
         String selection = NoteColumns.TYPE + "=? AND " + NoteColumns.PARENT_ID + "<>? AND " + NoteColumns.ID + "<>?";
         selection = (mState == ListEditState.NOTE_LIST) ? selection:
-            "(" + selection + ") OR (" + NoteColumns.ID + "=" + Notes.ID_ROOT_FOLDER + ")";
+                "(" + selection + ") OR (" + NoteColumns.ID + "=" + Notes.ID_ROOT_FOLDER + ")";
 
         mBackgroundQueryHandler.startQuery(FOLDER_LIST_QUERY_TOKEN,
                 null,
@@ -938,17 +1074,39 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
         if (view instanceof NotesListItem) {
             mFocusNoteDataItem = ((NotesListItem) view).getItemData();
-            if (mFocusNoteDataItem.getType() == Notes.TYPE_NOTE && !mNotesListAdapter.isInChoiceMode()) {
-                if (mNotesListView.startActionMode(mModeCallBack) != null) {
+            if (mFocusNoteDataItem != null && mFocusNoteDataItem.getType() == Notes.TYPE_NOTE
+                    && !mNotesListAdapter.isInChoiceMode()) {
+                if (mState == ListEditState.TRASH_FOLDER) {
+                    // In trash folder: show AlertDialog directly (avoid context menu recursion)
+                    showTrashNoteActionsDialog();
+                } else if (mNotesListView != null && mNotesListView.startActionMode(mModeCallBack) != null) {
                     mModeCallBack.onItemCheckedStateChanged(null, position, id, true);
                     mNotesListView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                 } else {
                     Log.e(TAG, "startActionMode fails");
                 }
-            } else if (mFocusNoteDataItem.getType() == Notes.TYPE_FOLDER) {
-                mNotesListView.setOnCreateContextMenuListener(mFolderOnCreateContextMenuListener);
+            } else if (mFocusNoteDataItem != null && mFocusNoteDataItem.getType() == Notes.TYPE_FOLDER) {
+                // For folders, use the normal context menu (no recursion issue)
+                if (mNotesListView != null) {
+                    mNotesListView.setOnCreateContextMenuListener(mFolderOnCreateContextMenuListener);
+                    mNotesListView.showContextMenuForChild(view);
+                }
             }
         }
-        return false;
+        return true;
     }
+
+    /**
+     * Context menu listener for trash folder notes.
+     * Provides "Restore" and "Delete permanently" options.
+     */
+    private final OnCreateContextMenuListener mTrashOnCreateContextMenuListener = new OnCreateContextMenuListener() {
+        public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
+            if (mFocusNoteDataItem != null) {
+                menu.setHeaderTitle(mFocusNoteDataItem.getSnippet());
+                menu.add(0, MENU_TRASH_RESTORE, 0, R.string.menu_restore);
+                menu.add(0, MENU_TRASH_DELETE, 0, R.string.menu_delete_permanently);
+            }
+        }
+    };
 }

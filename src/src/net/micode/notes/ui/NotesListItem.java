@@ -82,10 +82,19 @@ public class NotesListItem extends LinearLayout {
             if (data.getType() == Notes.TYPE_FOLDER) {
                 mTitle.setText(data.getSnippet()
                         + context.getString(R.string.format_folder_files_count,
-                                data.getNotesCount()));
+                        data.getNotesCount()));
                 mAlert.setVisibility(View.GONE);
             } else {
-                mTitle.setText(DataUtils.getFormattedSnippet(data.getSnippet()));
+                String snippet = DataUtils.getFormattedSnippet(data.getSnippet());
+                // Add pin indicator for pinned notes
+                if (data.isPinned()) {
+                    snippet = "\uD83D\uDCCC " + snippet;  // Pin emoji
+                }
+                // Add lock indicator for password-protected notes
+                if (data.hasPassword()) {
+                    snippet = "\uD83D\uDD12 " + snippet;  // Lock emoji
+                }
+                mTitle.setText(snippet);
                 if (data.hasAlert()) {
                     mAlert.setImageResource(R.drawable.clock);
                     mAlert.setVisibility(View.VISIBLE);

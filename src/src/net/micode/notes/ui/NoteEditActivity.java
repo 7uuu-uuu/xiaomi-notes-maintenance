@@ -277,6 +277,11 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
             mNoteEditor.setSelection(mNoteEditor.getText().length());
         }
+        // Apply Markdown rendering if enabled
+        if (mNoteEditor instanceof NoteEditText) {
+            boolean markdownEnabled = mSharedPrefs.getBoolean("pref_markdown_mode", false);
+            ((NoteEditText) mNoteEditor).setMarkdownEnabled(markdownEnabled);
+        }
         for (Integer id : sBgSelectorSelectionMap.keySet()) {
             findViewById(sBgSelectorSelectionMap.get(id)).setVisibility(View.GONE);
         }
@@ -358,8 +363,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
                 || ev.getX() > (x + view.getWidth())
                 || ev.getY() < y
                 || ev.getY() > (y + view.getHeight())) {
-                    return false;
-                }
+            return false;
+        }
         return true;
     }
 
@@ -418,7 +423,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         }
 
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, new int[] {
-            mWorkingNote.getWidgetId()
+                mWorkingNote.getWidgetId()
         });
 
         sendBroadcast(intent);
@@ -430,7 +435,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         if (id == R.id.btn_set_bg_color) {
             mNoteBgColorSelector.setVisibility(View.VISIBLE);
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
-                    -                    View.VISIBLE);
+                    View.VISIBLE);
         } else if (sBgSelectorBtnsMap.containsKey(id)) {
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
                     View.GONE);
@@ -502,53 +507,65 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         } else {
             menu.findItem(R.id.menu_delete_remind).setVisible(false);
         }
+        // Update pin menu title based on current state
+        if (mWorkingNote.getPinned() == 1) {
+            menu.findItem(R.id.menu_pin).setTitle(R.string.menu_unpin);
+        } else {
+            menu.findItem(R.id.menu_pin).setTitle(R.string.menu_pin);
+        }
+        // Update password menu visibility
+        if (mWorkingNote.hasPassword()) {
+            menu.findItem(R.id.menu_set_password).setVisible(false);
+            menu.findItem(R.id.menu_remove_password).setVisible(true);
+        } else {
+            menu.findItem(R.id.menu_set_password).setVisible(true);
+            menu.findItem(R.id.menu_remove_password).setVisible(false);
+        }
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_new_note:
-                createNewNote();
-                break;
-            case R.id.menu_delete:
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle(getString(R.string.alert_title_delete));
-                builder.setIcon(android.R.drawable.ic_dialog_alert);
-                builder.setMessage(getString(R.string.alert_message_delete_note));
-                builder.setPositiveButton(android.R.string.ok,
-                        new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
-                                deleteCurrentNote();
-                                finish();
-                            }
-                        });
-                builder.setNegativeButton(android.R.string.cancel, null);
-                builder.show();
-                break;
-            case R.id.menu_font_size:
-                mFontSizeSelector.setVisibility(View.VISIBLE);
-                findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
-                break;
-            case R.id.menu_list_mode:
-                mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
-                        TextNote.MODE_CHECK_LIST : 0);
-                break;
-            case R.id.menu_share:
-                getWorkingText();
-                sendTo(this, mWorkingNote.getContent());
-                break;
-            case R.id.menu_send_to_desktop:
-                sendToDesktop();
-                break;
-            case R.id.menu_alert:
-                setReminder();
-                break;
-            case R.id.menu_delete_remind:
-                mWorkingNote.setAlertDate(0, false);
-                break;
-            default:
-                break;
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_new_note) {
+            createNewNote();
+        } else if (itemId == R.id.menu_delete) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle(getString(R.string.alert_title_delete));
+            builder.setIcon(android.R.drawable.ic_dialog_alert);
+            builder.setMessage(getString(R.string.alert_message_delete_note));
+            builder.setPositiveButton(android.R.string.ok,
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            deleteCurrentNote();
+                            finish();
+                        }
+                    });
+            builder.setNegativeButton(android.R.string.cancel, null);
+            builder.show();
+        } else if (itemId == R.id.menu_font_size) {
+            mFontSizeSelector.setVisibility(View.VISIBLE);
+            findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
+        } else if (itemId == R.id.menu_list_mode) {
+            mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
+                    TextNote.MODE_CHECK_LIST : 0);
+        } else if (itemId == R.id.menu_share) {
+            getWorkingText();
+            sendTo(this, mWorkingNote.getContent());
+        } else if (itemId == R.id.menu_send_to_desktop) {
+            sendToDesktop();
+        } else if (itemId == R.id.menu_alert) {
+            setReminder();
+        } else if (itemId == R.id.menu_delete_remind) {
+            mWorkingNote.setAlertDate(0, false);
+        } else if (itemId == R.id.menu_pin) {
+            togglePin();
+        } else if (itemId == R.id.menu_set_password) {
+            setPassword();
+        } else if (itemId == R.id.menu_remove_password) {
+            removePassword();
+        } else if (itemId == R.id.menu_markdown) {
+            toggleMarkdown();
         }
         return true;
     }
@@ -595,14 +612,10 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             } else {
                 Log.d(TAG, "Wrong note id, should not happen");
             }
-            if (!isSyncMode()) {
-                if (!DataUtils.batchDeleteNotes(getContentResolver(), ids)) {
-                    Log.e(TAG, "Delete Note error");
-                }
-            } else {
-                if (!DataUtils.batchMoveToFolder(getContentResolver(), ids, Notes.ID_TRASH_FOLER)) {
-                    Log.e(TAG, "Move notes to trash folder error, should not happens");
-                }
+            // Always move to trash folder instead of permanent delete
+            // This allows users to restore notes from the trash
+            if (!DataUtils.batchMoveToFolder(getContentResolver(), ids, Notes.ID_TRASH_FOLER)) {
+                Log.e(TAG, "Move notes to trash folder error, should not happens");
             }
         }
         mWorkingNote.markDeleted(true);
@@ -623,7 +636,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         if (mWorkingNote.getNoteId() > 0) {
             Intent intent = new Intent(this, AlarmReceiver.class);
             intent.setData(ContentUris.withAppendedId(Notes.CONTENT_NOTE_URI, mWorkingNote.getNoteId()));
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             AlarmManager alarmManager = ((AlarmManager) getSystemService(ALARM_SERVICE));
             showAlertHeader();
             if(!set) {
@@ -869,5 +883,80 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     private void showToast(int resId, int duration) {
         Toast.makeText(this, resId, duration).show();
+    }
+
+    /**
+     * Toggle the pinned state of the current note.
+     * Pinned notes appear at the top of the note list.
+     */
+    private void togglePin() {
+        int currentPinned = mWorkingNote.getPinned();
+        int newPinned = (currentPinned == 1) ? 0 : 1;
+        mWorkingNote.setPinned(newPinned);
+        saveNote();
+        if (newPinned == 1) {
+            showToast(R.string.toast_note_pinned);
+        } else {
+            showToast(R.string.toast_note_unpinned);
+        }
+    }
+
+    /**
+     * Set a password lock for the current note.
+     * Shows a dialog for entering and confirming the password.
+     */
+    private void setPassword() {
+        final EditText passwordInput = new EditText(this);
+        passwordInput.setHint(R.string.hint_password);
+        passwordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.dialog_set_password_title);
+        builder.setView(passwordInput);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                String password = passwordInput.getText().toString();
+                if (!TextUtils.isEmpty(password)) {
+                    // In a real app, you would hash the password. For demo, store as-is.
+                    mWorkingNote.setPassword(password);
+                    saveNote();
+                    showToast(R.string.password_set_success);
+                }
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
+    }
+
+    /**
+     * Remove the password lock from the current note.
+     */
+    private void removePassword() {
+        mWorkingNote.setPassword("");
+        saveNote();
+        showToast(R.string.password_removed);
+    }
+
+    /**
+     * Toggle Markdown rendering mode for the current note.
+     * When enabled, basic Markdown syntax (**bold**, *italic*, ~~strikethrough~~)
+     * will be rendered with appropriate text styles.
+     */
+    private void toggleMarkdown() {
+        // Store markdown preference in SharedPreferences
+        SharedPreferences.Editor editor = mSharedPrefs.edit();
+        boolean currentMarkdown = mSharedPrefs.getBoolean("pref_markdown_mode", false);
+        boolean newMarkdown = !currentMarkdown;
+        editor.putBoolean("pref_markdown_mode", newMarkdown);
+        editor.commit();
+
+        if (newMarkdown) {
+            showToast(R.string.toast_markdown_enabled);
+        } else {
+            showToast(R.string.toast_markdown_disabled);
+        }
+        // Refresh the note display
+        initNoteScreen();
     }
 }

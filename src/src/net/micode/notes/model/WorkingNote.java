@@ -60,6 +60,10 @@ public class WorkingNote {
 
     private boolean mIsDeleted;
 
+    private int mPinned;
+
+    private String mPassword;
+
     private NoteSettingChangedListener mNoteSettingStatusListener;
 
     public static final String[] DATA_PROJECTION = new String[] {
@@ -78,7 +82,9 @@ public class WorkingNote {
             NoteColumns.BG_COLOR_ID,
             NoteColumns.WIDGET_ID,
             NoteColumns.WIDGET_TYPE,
-            NoteColumns.MODIFIED_DATE
+            NoteColumns.MODIFIED_DATE,
+            NoteColumns.PINNED,
+            NoteColumns.PASSWORD
     };
 
     private static final int DATA_ID_COLUMN = 0;
@@ -101,6 +107,10 @@ public class WorkingNote {
 
     private static final int NOTE_MODIFIED_DATE_COLUMN = 5;
 
+    private static final int NOTE_PINNED_COLUMN = 6;
+
+    private static final int NOTE_PASSWORD_COLUMN = 7;
+
     // New note construct
     private WorkingNote(Context context, long folderId) {
         mContext = context;
@@ -112,6 +122,8 @@ public class WorkingNote {
         mIsDeleted = false;
         mMode = 0;
         mWidgetType = Notes.TYPE_WIDGET_INVALIDE;
+        mPinned = 0;
+        mPassword = "";
     }
 
     // Existing note construct
@@ -137,6 +149,8 @@ public class WorkingNote {
                 mWidgetType = cursor.getInt(NOTE_WIDGET_TYPE_COLUMN);
                 mAlertDate = cursor.getLong(NOTE_ALERTED_DATE_COLUMN);
                 mModifiedDate = cursor.getLong(NOTE_MODIFIED_DATE_COLUMN);
+                mPinned = cursor.getInt(NOTE_PINNED_COLUMN);
+                mPassword = cursor.getString(NOTE_PASSWORD_COLUMN);
             }
             cursor.close();
         } else {
@@ -149,7 +163,7 @@ public class WorkingNote {
     private void loadNoteData() {
         Cursor cursor = mContext.getContentResolver().query(Notes.CONTENT_DATA_URI, DATA_PROJECTION,
                 DataColumns.NOTE_ID + "=?", new String[] {
-                    String.valueOf(mNoteId)
+                        String.valueOf(mNoteId)
                 }, null);
 
         if (cursor != null) {
@@ -175,7 +189,7 @@ public class WorkingNote {
     }
 
     public static WorkingNote createEmptyNote(Context context, long folderId, int widgetId,
-            int widgetType, int defaultBgColorId) {
+                                              int widgetType, int defaultBgColorId) {
         WorkingNote note = new WorkingNote(context, folderId);
         note.setBgColorId(defaultBgColorId);
         note.setWidgetId(widgetId);
@@ -243,7 +257,7 @@ public class WorkingNote {
         mIsDeleted = mark;
         if (mWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
                 && mWidgetType != Notes.TYPE_WIDGET_INVALIDE && mNoteSettingStatusListener != null) {
-                mNoteSettingStatusListener.onWidgetChanged();
+            mNoteSettingStatusListener.onWidgetChanged();
         }
     }
 
@@ -340,6 +354,50 @@ public class WorkingNote {
 
     public int getWidgetType() {
         return mWidgetType;
+    }
+
+    /**
+     * Get whether the note is pinned to top
+     * @return 1 if pinned, 0 if not pinned
+     */
+    public int getPinned() {
+        return mPinned;
+    }
+
+    /**
+     * Set the pinned state of the note
+     * @param pinned 1 to pin, 0 to unpin
+     */
+    public void setPinned(int pinned) {
+        if (pinned != mPinned) {
+            mPinned = pinned;
+            mNote.setNoteValue(NoteColumns.PINNED, String.valueOf(mPinned));
+        }
+    }
+
+    /**
+     * Check if the note has a password lock
+     * @return true if password is set
+     */
+    public boolean hasPassword() {
+        return !TextUtils.isEmpty(mPassword);
+    }
+
+    /**
+     * Get the password hash of the note
+     * @return password hash string, empty if no password
+     */
+    public String getPassword() {
+        return mPassword;
+    }
+
+    /**
+     * Set or remove the password lock for this note
+     * @param password password hash to set, empty string to remove lock
+     */
+    public void setPassword(String password) {
+        mPassword = password != null ? password : "";
+        mNote.setNoteValue(NoteColumns.PASSWORD, mPassword);
     }
 
     public interface NoteSettingChangedListener {

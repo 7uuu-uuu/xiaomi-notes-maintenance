@@ -28,18 +28,20 @@ import net.micode.notes.tool.DataUtils;
 
 public class NoteItemData {
     static final String [] PROJECTION = new String [] {
-        NoteColumns.ID,
-        NoteColumns.ALERTED_DATE,
-        NoteColumns.BG_COLOR_ID,
-        NoteColumns.CREATED_DATE,
-        NoteColumns.HAS_ATTACHMENT,
-        NoteColumns.MODIFIED_DATE,
-        NoteColumns.NOTES_COUNT,
-        NoteColumns.PARENT_ID,
-        NoteColumns.SNIPPET,
-        NoteColumns.TYPE,
-        NoteColumns.WIDGET_ID,
-        NoteColumns.WIDGET_TYPE,
+            NoteColumns.ID,
+            NoteColumns.ALERTED_DATE,
+            NoteColumns.BG_COLOR_ID,
+            NoteColumns.CREATED_DATE,
+            NoteColumns.HAS_ATTACHMENT,
+            NoteColumns.MODIFIED_DATE,
+            NoteColumns.NOTES_COUNT,
+            NoteColumns.PARENT_ID,
+            NoteColumns.SNIPPET,
+            NoteColumns.TYPE,
+            NoteColumns.WIDGET_ID,
+            NoteColumns.WIDGET_TYPE,
+            NoteColumns.PINNED,
+            NoteColumns.PASSWORD,
     };
 
     private static final int ID_COLUMN                    = 0;
@@ -54,6 +56,8 @@ public class NoteItemData {
     private static final int TYPE_COLUMN                  = 9;
     private static final int WIDGET_ID_COLUMN             = 10;
     private static final int WIDGET_TYPE_COLUMN           = 11;
+    private static final int PINNED_COLUMN                = 12;
+    private static final int PASSWORD_COLUMN              = 13;
 
     private long mId;
     private long mAlertDate;
@@ -75,6 +79,8 @@ public class NoteItemData {
     private boolean mIsOnlyOneItem;
     private boolean mIsOneNoteFollowingFolder;
     private boolean mIsMultiNotesFollowingFolder;
+    private int mPinned;
+    private boolean mHasPassword;
 
     public NoteItemData(Context context, Cursor cursor) {
         mId = cursor.getLong(ID_COLUMN);
@@ -91,6 +97,9 @@ public class NoteItemData {
         mType = cursor.getInt(TYPE_COLUMN);
         mWidgetId = cursor.getInt(WIDGET_ID_COLUMN);
         mWidgetType = cursor.getInt(WIDGET_TYPE_COLUMN);
+        mPinned = cursor.getInt(PINNED_COLUMN);
+        String passwordStr = cursor.getString(PASSWORD_COLUMN);
+        mHasPassword = !TextUtils.isEmpty(passwordStr);
 
         mPhoneNumber = "";
         if (mParentId == Notes.ID_CALL_RECORD_FOLDER) {
@@ -220,5 +229,29 @@ public class NoteItemData {
 
     public static int getNoteType(Cursor cursor) {
         return cursor.getInt(TYPE_COLUMN);
+    }
+
+    /**
+     * Check if this note is pinned to the top
+     * @return true if pinned
+     */
+    public boolean isPinned() {
+        return mPinned == 1;
+    }
+
+    /**
+     * Get the pinned value
+     * @return 1 if pinned, 0 if not
+     */
+    public int getPinned() {
+        return mPinned;
+    }
+
+    /**
+     * Check if this note has a password lock
+     * @return true if password protected
+     */
+    public boolean hasPassword() {
+        return mHasPassword;
     }
 }

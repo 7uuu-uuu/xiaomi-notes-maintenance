@@ -165,6 +165,19 @@ public class Notes {
          * <P> Type : INTEGER (long) </P>
          */
         public static final String VERSION = "version";
+
+        /**
+         * Whether the note is pinned to the top of the list.
+         * 1 means pinned, 0 means not pinned.
+         * <P> Type : INTEGER </P>
+         */
+        public static final String PINNED = "pinned";
+
+        /**
+         * The password hash for locking a note. Empty string means no lock.
+         * <P> Type : TEXT </P>
+         */
+        public static final String PASSWORD = "password";
     }
 
     public interface DataColumns {

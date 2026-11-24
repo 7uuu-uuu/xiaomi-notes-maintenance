@@ -116,6 +116,41 @@
     <string name="preferences_toast_success_set_accout">%1$s has been set as the sync account</string>
     <string name="preferences_bg_random_appear_title">New note background color random</string>
 
+    <!-- Pin feature strings -->
+    <string name="menu_pin">Pin to top</string>
+    <string name="menu_unpin">Unpin from top</string>
+    <string name="toast_note_pinned">Note pinned to top</string>
+    <string name="toast_note_unpinned">Note unpinned</string>
+
+    <!-- Password lock feature strings -->
+    <string name="menu_set_password">Set password</string>
+    <string name="menu_remove_password">Remove password</string>
+    <string name="dialog_password_title">Enter password</string>
+    <string name="dialog_set_password_title">Set password</string>
+    <string name="dialog_confirm_password_title">Confirm password</string>
+    <string name="hint_password">Enter password</string>
+    <string name="password_not_match">Passwords do not match</string>
+    <string name="password_set_success">Password set successfully</string>
+    <string name="password_removed">Password removed</string>
+    <string name="password_incorrect">Incorrect password</string>
+    <string name="note_locked">This note is locked</string>
+
+    <!-- Markdown feature strings -->
+    <string name="menu_markdown">Markdown mode</string>
+    <string name="menu_normal_text">Normal text</string>
+    <string name="toast_markdown_enabled">Markdown mode enabled</string>
+    <string name="toast_markdown_disabled">Markdown mode disabled</string>
+
+    <!-- Trash feature strings -->
+    <string name="menu_trash">Trash</string>
+    <string name="trash_folder_name">Trash</string>
+    <string name="menu_restore">Restore</string>
+    <string name="menu_delete_permanently">Delete permanently</string>
+    <string name="alert_message_restore">Restore this note to root folder?</string>
+    <string name="alert_message_delete_permanently">Permanently delete this note? This cannot be undone.</string>
+    <string name="toast_note_restored">Note restored</string>
+    <string name="toast_note_deleted_permanently">Note permanently deleted</string>
+
     <string name="button_delete">Delete</string>
     <string name="call_record_folder_name">Call notes</string>
     <string name="hint_foler_name">Input name</string>
@@ -127,7 +162,7 @@
     <string name="datetime_dialog_ok">set</string>
     <string name="datetime_dialog_cancel">cancel</string>
     <plurals name="search_results_title">
-         <item quantity="one"><xliff:g id="number" example="1">%1$s</xliff:g> result for \"<xliff:g id="search" example="???">%2$s</xliff:g>\"</item>
+        <item quantity="one"><xliff:g id="number" example="1">%1$s</xliff:g> result for \"<xliff:g id="search" example="???">%2$s</xliff:g>\"</item>
         <!-- Case of 0 or 2 or more results. -->
         <item quantity="other"><xliff:g id="number" example="15">%1$s</xliff:g> results for \"<xliff:g id="search" example="???">%2$s</xliff:g>\"</item>
     </plurals>
