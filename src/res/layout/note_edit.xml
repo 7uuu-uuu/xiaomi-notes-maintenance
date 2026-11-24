@@ -18,7 +18,7 @@
 <FrameLayout
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:background="@drawable/list_background"
+    android:background="@drawable/bg_app"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <LinearLayout
@@ -29,7 +29,30 @@
         <LinearLayout
             android:id="@+id/note_title"
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:minHeight="54dp"
+            android:orientation="vertical"
+            android:paddingLeft="6dp"
+            android:paddingRight="14dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <!-- 第一行：返回按钮、最后修改时间、实时字数 -->
+            <LinearLayout
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+            <!-- 本次美化新增：编辑页返回按钮（点击等同于系统返回，先保存再退出） -->
+            <ImageView
+                android:id="@+id/btn_edit_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_back"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_back" />
 
             <TextView
                 android:id="@+id/tv_modified_date"
@@ -38,7 +61,26 @@
                 android:layout_weight="1"
                 android:layout_gravity="left|center_vertical"
                 android:layout_marginRight="8dip"
+                android:maxLines="1"
+                android:ellipsize="end"
                 android:textAppearance="@style/TextAppearanceSecondaryItem" />
+
+            <!-- 本次维护新增：编辑页实时字数统计 -->
+            <TextView
+                android:id="@+id/tv_word_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:textAppearance="@style/TextAppearanceSecondaryItem" />
+            </LinearLayout>
+
+            <!-- 第二行：提醒状态、标签、打标签、字号调节、插入图片、背景色 -->
+            <LinearLayout
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
             <ImageView
                 android:id="@+id/iv_alert_icon"
@@ -56,23 +98,108 @@
                 android:layout_marginRight="8dip"
                 android:textAppearance="@style/TextAppearanceSecondaryItem" />
 
-            <ImageButton
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- 本次维护新增：当前便签的标签小条与打标签入口 -->
+            <TextView
+                android:id="@+id/tv_edit_tag"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:background="@drawable/bg_btn_set_color" />
+                android:layout_gravity="center_vertical"
+                android:layout_marginRight="6dip"
+                android:background="@drawable/bg_tag_chip"
+                android:ellipsize="end"
+                android:maxWidth="64dp"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:singleLine="true"
+                android:textColor="@color/tag_text"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/btn_edit_tag"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginLeft="2dp"
+                android:layout_gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_tag"
+                android:gravity="center"
+                android:text="#"
+                android:textColor="@color/icon_title"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <!-- 本次维护新增：正文字号快捷调节（A- / A+），即时生效并记忆偏好 -->
+            <TextView
+                android:id="@+id/btn_font_dec"
+                android:layout_width="30dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:text="A-"
+                android:textColor="@color/icon_title"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="?android:attr/selectableItemBackground" />
+
+            <TextView
+                android:id="@+id/btn_font_inc"
+                android:layout_width="30dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:text="A+"
+                android:textColor="@color/icon_title"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="?android:attr/selectableItemBackground" />
+
+            <!-- 本次维护新增：正文插入图片（相册 / 拍照），点击弹出选择菜单 -->
+            <TextView
+                android:id="@+id/btn_insert_image"
+                android:layout_width="32dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/menu_insert_image"
+                android:gravity="center"
+                android:text="图"
+                android:textColor="@color/icon_title"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btn_set_bg_color"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginLeft="6dp"
+                android:layout_gravity="center_vertical"
+                android:padding="7dp"
+                android:src="@drawable/ic_palette"
+                android:background="@null" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/sv_note_edit"
             android:layout_width="fill_parent"
             android:layout_height="fill_parent"
+            android:layout_marginLeft="12dp"
+            android:layout_marginRight="12dp"
+            android:layout_marginBottom="12dp"
             android:orientation="vertical">
 
             <ImageView
                 android:layout_width="fill_parent"
                 android:layout_height="7dip"
-                android:background="@drawable/bg_color_btn_mask" />
+                android:background="@null" />
 
             <ScrollView
                 android:layout_width="fill_parent"
@@ -95,8 +222,12 @@
                         android:background="@null"
                         android:autoLink="all"
                         android:linksClickable="false"
+                        android:paddingLeft="20dp"
+                        android:paddingRight="20dp"
+                        android:paddingTop="16dp"
+                        android:paddingBottom="20dp"
                         android:minLines="12"
-                        android:textAppearance="@style/TextAppearancePrimaryItem"
+                        android:textAppearance="@style/TextAppearanceNoteBody"
                         android:lineSpacingMultiplier="1.2" />
 
                     <LinearLayout
@@ -112,36 +243,32 @@
             <ImageView
                 android:layout_width="fill_parent"
                 android:layout_height="7dip"
-                android:background="@drawable/bg_color_btn_mask" />
+                android:background="@null" />
         </LinearLayout>
     </LinearLayout>
 
-    <ImageView
-        android:id="@+id/btn_set_bg_color"
-        android:layout_height="43dip"
-        android:layout_width="wrap_content"
-        android:background="@drawable/bg_color_btn_mask"
-        android:layout_gravity="top|right" />
-
     <LinearLayout
         android:id="@+id/note_bg_color_selector"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@drawable/note_edit_color_selector_panel"
-        android:layout_marginTop="30dip"
-        android:layout_marginRight="8dip"
+        android:layout_width="232dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_selector_panel"
+        android:padding="8dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginRight="12dp"
         android:layout_gravity="top|right"
         android:visibility="gone">
 
         <FrameLayout
             android:layout_width="0dip"
             android:layout_height="match_parent"
+            android:layout_margin="3dp"
             android:layout_weight="1">
 
             <ImageView
                 android:id="@+id/iv_bg_yellow"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@drawable/swatch_yellow" />
 
             <ImageView
                 android:id="@+id/iv_bg_yellow_select"
@@ -157,12 +284,14 @@
         <FrameLayout
             android:layout_width="0dip"
             android:layout_height="match_parent"
+            android:layout_margin="3dp"
             android:layout_weight="1">
 
             <ImageView
                 android:id="@+id/iv_bg_blue"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@drawable/swatch_blue" />
 
             <ImageView
                 android:id="@+id/iv_bg_blue_select"
@@ -178,12 +307,14 @@
         <FrameLayout
             android:layout_width="0dip"
             android:layout_height="match_parent"
+            android:layout_margin="3dp"
             android:layout_weight="1">
 
             <ImageView
                 android:id="@+id/iv_bg_white"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@drawable/swatch_white" />
 
             <ImageView
                 android:id="@+id/iv_bg_white_select"
@@ -199,12 +330,14 @@
         <FrameLayout
             android:layout_width="0dip"
             android:layout_height="match_parent"
+            android:layout_margin="3dp"
             android:layout_weight="1">
 
             <ImageView
                 android:id="@+id/iv_bg_green"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@drawable/swatch_green" />
 
             <ImageView
                 android:id="@+id/iv_bg_green_select"
@@ -219,12 +352,14 @@
         <FrameLayout
             android:layout_width="0dip"
             android:layout_height="match_parent"
+            android:layout_margin="3dp"
             android:layout_weight="1">
 
             <ImageView
                 android:id="@+id/iv_bg_red"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@drawable/swatch_red" />
 
             <ImageView
                 android:id="@+id/iv_bg_red_select"
@@ -241,7 +376,10 @@
         android:id="@+id/font_size_selector"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/font_size_selector_bg"
+        android:background="@drawable/bg_selector_panel"
+        android:layout_marginLeft="12dp"
+        android:layout_marginRight="12dp"
+        android:layout_marginBottom="12dp"
         android:layout_gravity="bottom"
         android:visibility="gone">
 

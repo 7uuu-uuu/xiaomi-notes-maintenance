@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次维护新增：拍照输出的临时文件路径与正文图片目录，供 FileProvider 生成 content:// Uri -->
+<paths>
+    <cache-path
+        name="camera_temp"
+        path="camera/" />
+    <files-path
+        name="note_images"
+        path="note_images/" />
+</paths>

@@ -17,8 +17,15 @@
 package net.micode.notes.ui;
 
 import android.content.Context;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.TextUtils;
 import android.text.format.DateUtils;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.ForegroundColorSpan;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AbsListView;
 import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -48,6 +55,16 @@ public class NotesListItem extends LinearLayout {
     private NoteItemData mItemData;
     // 批量多选模式下显示的复选框控件
     private CheckBox mCheckBox;
+    // 本次维护新增：置顶图钉与标签小条
+    private ImageView mPinned;
+    private TextView mTag;
+    // 本次维护新增：搜索态下需要高亮的关键词
+    private String mHighlightKeyword;
+    // 本次维护新增：行内“更多操作”按钮及其点击回调
+    private View mMenuButton;
+    private OnClickListener mMenuClickListener;
+    // 本次维护新增：双列网格紧凑排版标记
+    private boolean mCompactMode;
 
     /**
      * 构造列表项视图：加载 R.layout.note_item 布局并初始化各个子控件引用。
@@ -55,11 +72,48 @@ public class NotesListItem extends LinearLayout {
     public NotesListItem(Context context) {
         super(context);
         inflate(context, R.layout.note_item, this);
+        // 本次维护新增：AbsListView 默认给子项 MATCH_PARENT 高度，双列网格下会把行高压扁导致卡片重叠，
+        // 这里显式改为 WRAP_CONTENT，让行高跟随内容
+        setLayoutParams(new AbsListView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mAlert = (ImageView) findViewById(R.id.iv_alert_icon);
         mTitle = (TextView) findViewById(R.id.tv_title);
         mTime = (TextView) findViewById(R.id.tv_time);
         mCallName = (TextView) findViewById(R.id.tv_name);
         mCheckBox = (CheckBox) findViewById(android.R.id.checkbox);
+        mPinned = (ImageView) findViewById(R.id.iv_pinned);
+        mTag = (TextView) findViewById(R.id.tv_tag);
+        // 本次维护新增：行内菜单按钮，点击事件交给列表 Activity 统一处理
+        mMenuButton = findViewById(R.id.btn_item_menu);
+        mMenuButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                if (mMenuClickListener != null) {
+                    mMenuClickListener.onClick(v);
+                }
+            }
+        });
+    }
+
+    /**
+     * 本次维护新增：设置行内“更多操作”按钮的点击监听。
+     */
+    public void setItemMenuClickListener(OnClickListener listener) {
+        mMenuClickListener = listener;
+    }
+
+    /**
+     * 本次维护新增：设置双列网格紧凑排版，紧凑时隐藏相对时间并固定行高，
+     * 避免 GridView 按较矮的同排条目压缩行高、导致卡片互相遮挡。
+     */
+    public void setCompactMode(boolean compact) {
+        mCompactMode = compact;
+        ViewGroup.LayoutParams lp = getLayoutParams();
+        if (lp instanceof AbsListView.LayoutParams) {
+            ((AbsListView.LayoutParams) lp).height = compact
+                    ? (int) (92 * getResources().getDisplayMetrics().density)
+                    : ViewGroup.LayoutParams.WRAP_CONTENT;
+            setLayoutParams(lp);
+        }
     }
 
     /**
@@ -79,8 +133,16 @@ public class NotesListItem extends LinearLayout {
         }
 
         mItemData = data;
+        // 形态 0（本次维护新增）：回收站系统文件夹，显示“回收站(数量)”与删除图标
+        if (data.getId() == Notes.ID_TRASH_FOLER) {
+            mCallName.setVisibility(View.GONE);
+            mAlert.setVisibility(View.VISIBLE);
+            mTitle.setTextAppearance(context, R.style.TextAppearancePrimaryItem);
+            mTitle.setText(context.getString(R.string.trash_folder_name)
+                    + context.getString(R.string.format_folder_files_count, data.getNotesCount()));
+            mAlert.setImageResource(R.drawable.ic_trash);
         // 形态 1：通话便签系统文件夹，显示“通话便签(数量)”和通话记录专属图标
-        if (data.getId() == Notes.ID_CALL_RECORD_FOLDER) {
+        } else if (data.getId() == Notes.ID_CALL_RECORD_FOLDER) {
             mCallName.setVisibility(View.GONE);
             mAlert.setVisibility(View.VISIBLE);
             mTitle.setTextAppearance(context, R.style.TextAppearancePrimaryItem);
@@ -94,7 +156,7 @@ public class NotesListItem extends LinearLayout {
             mTitle.setTextAppearance(context,R.style.TextAppearanceSecondaryItem);
             mTitle.setText(DataUtils.getFormattedSnippet(data.getSnippet()));
             if (data.hasAlert()) {
-                mAlert.setImageResource(R.drawable.clock);
+                mAlert.setImageResource(R.drawable.ic_clock);
                 mAlert.setVisibility(View.VISIBLE);
             } else {
                 mAlert.setVisibility(View.GONE);
@@ -107,21 +169,15 @@ public class NotesListItem extends LinearLayout {
             if (data.getType() == Notes.TYPE_FOLDER) {
                 mTitle.setText(data.getSnippet()
                         + context.getString(R.string.format_folder_files_count,
-                        data.getNotesCount()));
-                mAlert.setVisibility(View.GONE);
+                                data.getNotesCount()));
+                // 本次美化调整：文件夹条目显示统一的线性文件夹图标
+                mAlert.setVisibility(View.VISIBLE);
+                mAlert.setImageResource(R.drawable.ic_folder);
             } else {
-                String snippet = DataUtils.getFormattedSnippet(data.getSnippet());
-                // Add pin indicator for pinned notes
-                if (data.isPinned()) {
-                    snippet = "\uD83D\uDCCC " + snippet;  // Pin emoji
-                }
-                // Add lock indicator for password-protected notes
-                if (data.hasPassword()) {
-                    snippet = "\uD83D\uDD12 " + snippet;  // Lock emoji
-                }
-                mTitle.setText(snippet);
+                // 本次维护新增：搜索结果中对命中的关键词做底色+改色高亮
+                mTitle.setText(highlight(context, DataUtils.getFormattedSnippet(data.getSnippet())));
                 if (data.hasAlert()) {
-                    mAlert.setImageResource(R.drawable.clock);
+                    mAlert.setImageResource(R.drawable.ic_clock);
                     mAlert.setVisibility(View.VISIBLE);
                 } else {
                     mAlert.setVisibility(View.GONE);
@@ -129,8 +185,56 @@ public class NotesListItem extends LinearLayout {
             }
         }
         mTime.setText(DateUtils.getRelativeTimeSpanString(data.getModifiedDate()));
+        // 本次维护新增：双列网格下半宽卡片空间有限，隐藏相对时间
+        mTime.setVisibility(mCompactMode ? View.GONE : View.VISIBLE);
+
+        // 本次维护新增：普通便签才显示置顶图钉与标签，文件夹/系统目录一律隐藏
+        if (data.getType() == Notes.TYPE_NOTE) {
+            // 本次维护新增：多选模式下隐藏行内菜单按钮，避免与复选框挤在一起
+            mMenuButton.setVisibility(choiceMode ? View.GONE : View.VISIBLE);
+            mPinned.setVisibility(data.isPinned() ? View.VISIBLE : View.GONE);
+            String tag = data.getTag();
+            if (tag != null && tag.length() > 0) {
+                mTag.setText(tag);
+                mTag.setVisibility(View.VISIBLE);
+            } else {
+                mTag.setVisibility(View.GONE);
+            }
+        } else {
+            mMenuButton.setVisibility(View.GONE);
+            mPinned.setVisibility(View.GONE);
+            mTag.setVisibility(View.GONE);
+        }
 
         setBackground(data);
+    }
+
+    /**
+     * 本次维护新增：设置需要高亮的关键词，null 或空串表示不高亮。
+     */
+    public void setHighlightKeyword(String keyword) {
+        mHighlightKeyword = keyword;
+    }
+
+    /**
+     * 本次维护新增：把 text 中首个命中的关键词包装成带底色与配色的高亮文本（不区分大小写）。
+     */
+    private CharSequence highlight(Context context, CharSequence text) {
+        if (TextUtils.isEmpty(mHighlightKeyword) || text == null) {
+            return text;
+        }
+        String plain = text.toString();
+        int start = plain.toLowerCase().indexOf(mHighlightKeyword.toLowerCase());
+        if (start < 0) {
+            return text;
+        }
+        SpannableStringBuilder builder = new SpannableStringBuilder(plain);
+        int end = start + mHighlightKeyword.length();
+        builder.setSpan(new BackgroundColorSpan(0xFFD3F4EE), start, end,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(0xFF0F8C82), start, end,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return builder;
     }
 
     /**

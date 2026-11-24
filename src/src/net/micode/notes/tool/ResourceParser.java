@@ -49,37 +49,53 @@ public class ResourceParser {
     public static final int BG_DEFAULT_FONT_SIZE = TEXT_MEDIUM;
 
     /**
+     * 将颜色编号约束在合法的 0~(length-1) 区间内（本次维护新增的越界保护）。
+     * 当传入编号为负数或超出数组长度时，统一回退到默认黄色（编号 0），避免数组下标越界崩溃。
+     *
+     * @param id     原始颜色编号
+     * @param length 颜色资源数组长度
+     * @return 合法区间内的颜色编号
+     */
+    private static int clampColorIndex(int id, int length) {
+        if (id < 0 || id >= length) {
+            return YELLOW;
+        }
+        return id;
+    }
+
+    /**
      * 便签编辑页背景图片资源映射内部类，提供编辑正文区与标题栏的 5 色 Nine-Patch 背景图。
      */
     public static class NoteBgResources {
+        // 本次美化调整：改用浅色圆角纸面 drawable，替代原 9-patch 便签纸贴图
         private final static int [] BG_EDIT_RESOURCES = new int [] {
-            R.drawable.edit_yellow,
-            R.drawable.edit_blue,
-            R.drawable.edit_white,
-            R.drawable.edit_green,
-            R.drawable.edit_red
+            R.drawable.edit_card_yellow,
+            R.drawable.edit_card_blue,
+            R.drawable.edit_card_white,
+            R.drawable.edit_card_green,
+            R.drawable.edit_card_red
         };
 
         private final static int [] BG_EDIT_TITLE_RESOURCES = new int [] {
-            R.drawable.edit_title_yellow,
-            R.drawable.edit_title_blue,
-            R.drawable.edit_title_white,
-            R.drawable.edit_title_green,
-            R.drawable.edit_title_red
+            R.drawable.edit_header_yellow,
+            R.drawable.edit_header_blue,
+            R.drawable.edit_header_white,
+            R.drawable.edit_header_green,
+            R.drawable.edit_header_red
         };
 
         /**
-         * 根据颜色编号获取编辑页正文区域背景 drawable 资源 ID。
+         * 根据颜色编号获取编辑页正文区域背景 drawable 资源 ID；编号越界时回退默认黄色。
          */
         public static int getNoteBgResource(int id) {
-            return BG_EDIT_RESOURCES[id];
+            return BG_EDIT_RESOURCES[clampColorIndex(id, BG_EDIT_RESOURCES.length)];
         }
 
         /**
-         * 根据颜色编号获取编辑页顶部标题栏背景 drawable 资源 ID。
+         * 根据颜色编号获取编辑页顶部标题栏背景 drawable 资源 ID；编号越界时回退默认黄色。
          */
         public static int getNoteTitleBgResource(int id) {
-            return BG_EDIT_TITLE_RESOURCES[id];
+            return BG_EDIT_TITLE_RESOURCES[clampColorIndex(id, BG_EDIT_TITLE_RESOURCES.length)];
         }
     }
 
@@ -104,61 +120,63 @@ public class ResourceParser {
      * 根据便签在列表中的相对位置（首项、中间项、末项、独立单项）及文件夹类型返回对应圆角/拼接背景。
      */
     public static class NoteItemBgResources {
+        // 本次美化调整：条目第一项、中间项、末项、单项统一使用独立的浅色圆角卡片，
+        // 不再依赖上下拼接的 9-patch，列表呈现为一张张独立卡片
         private final static int [] BG_FIRST_RESOURCES = new int [] {
-            R.drawable.list_yellow_up,
-            R.drawable.list_blue_up,
-            R.drawable.list_white_up,
-            R.drawable.list_green_up,
-            R.drawable.list_red_up
+            R.drawable.note_card_yellow,
+            R.drawable.note_card_blue,
+            R.drawable.note_card_white,
+            R.drawable.note_card_green,
+            R.drawable.note_card_red
         };
 
         private final static int [] BG_NORMAL_RESOURCES = new int [] {
-            R.drawable.list_yellow_middle,
-            R.drawable.list_blue_middle,
-            R.drawable.list_white_middle,
-            R.drawable.list_green_middle,
-            R.drawable.list_red_middle
+            R.drawable.note_card_yellow,
+            R.drawable.note_card_blue,
+            R.drawable.note_card_white,
+            R.drawable.note_card_green,
+            R.drawable.note_card_red
         };
 
         private final static int [] BG_LAST_RESOURCES = new int [] {
-            R.drawable.list_yellow_down,
-            R.drawable.list_blue_down,
-            R.drawable.list_white_down,
-            R.drawable.list_green_down,
-            R.drawable.list_red_down,
+            R.drawable.note_card_yellow,
+            R.drawable.note_card_blue,
+            R.drawable.note_card_white,
+            R.drawable.note_card_green,
+            R.drawable.note_card_red,
         };
 
         private final static int [] BG_SINGLE_RESOURCES = new int [] {
-            R.drawable.list_yellow_single,
-            R.drawable.list_blue_single,
-            R.drawable.list_white_single,
-            R.drawable.list_green_single,
-            R.drawable.list_red_single
+            R.drawable.note_card_yellow,
+            R.drawable.note_card_blue,
+            R.drawable.note_card_white,
+            R.drawable.note_card_green,
+            R.drawable.note_card_red
         };
 
-        // 获取列表首条便签背景资源 ID
+        // 获取列表首条便签背景资源 ID，编号越界时回退默认黄色
         public static int getNoteBgFirstRes(int id) {
-            return BG_FIRST_RESOURCES[id];
+            return BG_FIRST_RESOURCES[clampColorIndex(id, BG_FIRST_RESOURCES.length)];
         }
 
-        // 获取列表末条便签背景资源 ID
+        // 获取列表末条便签背景资源 ID，编号越界时回退默认黄色
         public static int getNoteBgLastRes(int id) {
-            return BG_LAST_RESOURCES[id];
+            return BG_LAST_RESOURCES[clampColorIndex(id, BG_LAST_RESOURCES.length)];
         }
 
-        // 获取列表唯一单条便签背景资源 ID
+        // 获取列表唯一单条便签背景资源 ID，编号越界时回退默认黄色
         public static int getNoteBgSingleRes(int id) {
-            return BG_SINGLE_RESOURCES[id];
+            return BG_SINGLE_RESOURCES[clampColorIndex(id, BG_SINGLE_RESOURCES.length)];
         }
 
-        // 获取列表中间普通便签背景资源 ID
+        // 获取列表中间普通便签背景资源 ID，编号越界时回退默认黄色
         public static int getNoteBgNormalRes(int id) {
-            return BG_NORMAL_RESOURCES[id];
+            return BG_NORMAL_RESOURCES[clampColorIndex(id, BG_NORMAL_RESOURCES.length)];
         }
 
-        // 获取文件夹列表项固定背景资源 ID
+        // 获取文件夹列表项固定背景资源 ID（本次美化改为统一的白色圆角卡片）
         public static int getFolderBgRes() {
-            return R.drawable.list_folder;
+            return R.drawable.note_card_folder;
         }
     }
 
@@ -166,30 +184,31 @@ public class ResourceParser {
      * 桌面小部件背景资源映射内部类，分别提供 2x2 和 4x4 两种尺寸的 5 色背景图。
      */
     public static class WidgetBgResources {
+        // 本次美化调整：小部件改用浅色圆角卡片，替代旧版 9-patch 彩色贴图
         private final static int [] BG_2X_RESOURCES = new int [] {
-            R.drawable.widget_2x_yellow,
-            R.drawable.widget_2x_blue,
-            R.drawable.widget_2x_white,
-            R.drawable.widget_2x_green,
-            R.drawable.widget_2x_red,
+            R.drawable.widget_card_yellow,
+            R.drawable.widget_card_blue,
+            R.drawable.widget_card_white,
+            R.drawable.widget_card_green,
+            R.drawable.widget_card_red,
         };
 
-        // 根据颜色编号获取 2x2 小部件背景资源 ID
+        // 根据颜色编号获取 2x2 小部件背景资源 ID，编号越界时回退默认黄色
         public static int getWidget2xBgResource(int id) {
-            return BG_2X_RESOURCES[id];
+            return BG_2X_RESOURCES[clampColorIndex(id, BG_2X_RESOURCES.length)];
         }
 
         private final static int [] BG_4X_RESOURCES = new int [] {
-            R.drawable.widget_4x_yellow,
-            R.drawable.widget_4x_blue,
-            R.drawable.widget_4x_white,
-            R.drawable.widget_4x_green,
-            R.drawable.widget_4x_red
+            R.drawable.widget_card_yellow,
+            R.drawable.widget_card_blue,
+            R.drawable.widget_card_white,
+            R.drawable.widget_card_green,
+            R.drawable.widget_card_red
         };
 
-        // 根据颜色编号获取 4x4 小部件背景资源 ID
+        // 根据颜色编号获取 4x4 小部件背景资源 ID，编号越界时回退默认黄色
         public static int getWidget4xBgResource(int id) {
-            return BG_4X_RESOURCES[id];
+            return BG_4X_RESOURCES[clampColorIndex(id, BG_4X_RESOURCES.length)];
         }
     }
 
@@ -205,16 +224,13 @@ public class ResourceParser {
         };
 
         /**
-         * 根据字号档位索引获取对应的 TextAppearance 样式资源 ID，含越界兜底保护。
+         * 根据字号档位索引获取对应的 TextAppearance 样式资源 ID。
+         * 本次维护补充了负数索引的兜底：当 id 为负数或超出资源数组长度时，统一回退到默认中号样式，
+         * 避免数组下标越界抛出 ArrayIndexOutOfBoundsException。
          */
         public static int getTexAppearanceResource(int id) {
-            /**
-             * HACKME: Fix bug of store the resource id in shared preference.
-             * The id may larger than the length of resources, in this case,
-             * return the {@link ResourceParser#BG_DEFAULT_FONT_SIZE}
-             */
-            if (id >= TEXTAPPEARANCE_RESOURCES.length) {
-                return BG_DEFAULT_FONT_SIZE;
+            if (id < 0 || id >= TEXTAPPEARANCE_RESOURCES.length) {
+                return TEXTAPPEARANCE_RESOURCES[BG_DEFAULT_FONT_SIZE];
             }
             return TEXTAPPEARANCE_RESOURCES[id];
         }

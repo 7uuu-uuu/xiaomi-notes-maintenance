@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次美化新增：列表项标签小条背景（淡青底圆角） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/tag_chip_bg" />
+    <corners android:radius="8dp" />
+</shape>

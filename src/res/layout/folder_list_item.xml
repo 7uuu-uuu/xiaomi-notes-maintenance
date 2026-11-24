@@ -15,15 +15,21 @@
      limitations under the License.
 -->
 
+<!-- 本次美化调整：文件夹选择项改为左对齐、留白更充足 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:minHeight="50dip" >
+    android:minHeight="52dp"
+    android:gravity="center_vertical"
+    android:paddingLeft="20dp"
+    android:paddingRight="20dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp">
 
     <TextView
         android:id="@+id/tv_folder_name"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:textAppearance="@style/TextAppearancePrimaryItem" />
 </LinearLayout>

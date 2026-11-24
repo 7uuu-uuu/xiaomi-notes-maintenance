@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2010-2011, The MiCode Open Source Community (www.micode.net)
  *
@@ -23,6 +22,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Build;
 
 import net.micode.notes.R;
 import net.micode.notes.ui.NotesListActivity;
@@ -86,7 +86,7 @@ public class GTaskASyncTask extends AsyncTask<Void, String, Integer> {
      */
     public void publishProgess(String message) {
         publishProgress(new String[] {
-            message
+                message
         });
     }
 
@@ -96,28 +96,44 @@ public class GTaskASyncTask extends AsyncTask<Void, String, Integer> {
      * @param tickerId 状态栏滚动提示语字符串资源 ID
      * @param content  通知展开后的详情内容文本
      */
-    @SuppressWarnings("deprecation")
     private void showNotification(int tickerId, String content) {
         PendingIntent pendingIntent;
         if (tickerId != R.string.ticker_success) {
             pendingIntent = PendingIntent.getActivity(mContext, 0, new Intent(mContext,
-                    NotesPreferenceActivity.class), PendingIntent.FLAG_UPDATE_CURRENT);
+                    NotesPreferenceActivity.class), PendingIntent.FLAG_IMMUTABLE);
         } else {
             pendingIntent = PendingIntent.getActivity(mContext, 0, new Intent(mContext,
-                    NotesListActivity.class), PendingIntent.FLAG_UPDATE_CURRENT);
+                    NotesListActivity.class), PendingIntent.FLAG_IMMUTABLE);
         }
 
-        Notification.Builder builder = new Notification.Builder(mContext)
+        String channelId = "gtask_sync";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    channelId,
+                    mContext.getString(R.string.app_name),
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            mNotifiManager.createNotificationChannel(channel);
+        }
+
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder = new Notification.Builder(mContext, channelId);
+        } else {
+            builder = new Notification.Builder(mContext);
+        }
+
+        Notification notification = builder
                 .setSmallIcon(R.drawable.notification)
                 .setTicker(mContext.getString(tickerId))
-                .setWhen(System.currentTimeMillis())
                 .setContentTitle(mContext.getString(R.string.app_name))
                 .setContentText(content)
                 .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
                 .setDefaults(Notification.DEFAULT_LIGHTS)
-                .setAutoCancel(true);
+                .setWhen(System.currentTimeMillis())
+                .build();
 
-        mNotifiManager.notify(GTASK_SYNC_NOTIFICATION_ID, builder.build());
+        mNotifiManager.notify(GTASK_SYNC_NOTIFICATION_ID, notification);
     }
 
     @Override

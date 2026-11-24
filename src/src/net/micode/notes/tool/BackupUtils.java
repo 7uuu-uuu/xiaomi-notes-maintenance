@@ -277,11 +277,11 @@ public class BackupUtils {
                 dataCursor.close();
             }
             // print a line separator between note
+            // 本次维护修复：原代码误用 Character.LETTER_NUMBER（Unicode 字符类别常量）作为分隔字节，
+            // 会在导出文本中写入异常字符；改为标准换行符，在两条便签之间留出一个空行作为分隔。
             try {
-                ps.write(new byte[] {
-                        Character.LINE_SEPARATOR, Character.LETTER_NUMBER
-                });
-            } catch (IOException e) {
+                ps.println();
+            } catch (Exception e) {
                 Log.e(TAG, e.toString());
             }
         }

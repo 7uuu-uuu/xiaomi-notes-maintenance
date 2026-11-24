@@ -18,6 +18,7 @@ package net.micode.notes.model;
 
 import android.appwidget.AppWidgetManager;
 import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.text.TextUtils;
@@ -27,8 +28,10 @@ import net.micode.notes.data.Notes;
 import net.micode.notes.data.Notes.CallNote;
 import net.micode.notes.data.Notes.DataColumns;
 import net.micode.notes.data.Notes.DataConstants;
+import net.micode.notes.data.Notes.HistoryColumns;
 import net.micode.notes.data.Notes.NoteColumns;
 import net.micode.notes.data.Notes.TextNote;
+import net.micode.notes.tool.HistoryPolicy;
 import net.micode.notes.tool.ResourceParser.NoteBgResources;
 
 
@@ -263,6 +266,8 @@ public class WorkingNote {
      */
     public synchronized boolean saveNote() {
         if (isWorthSaving()) {
+            // 本次维护新增：在覆盖旧正文之前，先把数据库中的现存正文归档为一条历史版本
+            recordHistory();
             if (!existInDatabase()) {
                 if ((mNoteId = Note.getNewNoteId(mContext, mFolderId)) == 0) {
                     Log.e(TAG, "Create new note fail with id:" + mNoteId);
@@ -284,6 +289,87 @@ public class WorkingNote {
         } else {
             return false;
         }
+    }
+
+    /**
+     * 本次维护新增：将数据库中被覆盖前的正文归档为一条历史版本记录。
+     * 归档前做两重去重：①旧正文与新正文完全相同（例如仅修改背景色）时无需归档；
+     * ②旧正文与最近一条历史版本相同（连续多次保存未改动正文）时不再重复归档。
+     * 归档条数上限与过期清理由 NotesProvider 在写入时统一执行。
+     */
+    private void recordHistory() {
+        if (!existInDatabase() || TextUtils.isEmpty(mContent)) {
+            return;
+        }
+        String previousContent = loadStoredContent();
+        if (!HistoryPolicy.shouldRecord(previousContent, mContent)) {
+            return;
+        }
+        String newestHistory = loadNewestHistoryContent();
+        // 第二重去重：旧正文与最近一条历史版本完全相同时不再重复归档；
+        // 注意此处比较的是“旧正文”与“已有历史”，不能复用 shouldRecord(旧正文, 新正文) 的判断口径
+        if (!TextUtils.isEmpty(newestHistory) && TextUtils.equals(newestHistory, previousContent)) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+        values.put(HistoryColumns.NOTE_ID, mNoteId);
+        values.put(HistoryColumns.CONTENT, previousContent);
+        values.put(HistoryColumns.SNIPPET, HistoryPolicy.makeSnippet(previousContent,
+                HistoryPolicy.SNIPPET_MAX_LENGTH));
+        values.put(HistoryColumns.SAVED_DATE, System.currentTimeMillis());
+        try {
+            mContext.getContentResolver().insert(Notes.CONTENT_HISTORY_URI, values);
+        } catch (Exception e) {
+            // 历史归档属于增强能力，写入失败不能阻断便签本身的保存流程
+            Log.e(TAG, "Record note history failed:" + e.toString());
+        }
+    }
+
+    /**
+     * 读取 data 表中当前便签已持久化的正文内容。
+     *
+     * @return 数据库现存正文；不存在时返回空串
+     */
+    private String loadStoredContent() {
+        Cursor cursor = mContext.getContentResolver().query(Notes.CONTENT_DATA_URI,
+                new String[] { DataColumns.CONTENT },
+                DataColumns.NOTE_ID + "=? AND " + DataColumns.MIME_TYPE + "=?",
+                new String[] { String.valueOf(mNoteId), DataConstants.NOTE }, null);
+        String content = "";
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    content = cursor.getString(0);
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        return content == null ? "" : content;
+    }
+
+    /**
+     * 读取该便签最近一条历史版本的正文，用于避免重复归档相同内容。
+     *
+     * @return 最近一条历史正文；无历史时返回空串
+     */
+    private String loadNewestHistoryContent() {
+        Cursor cursor = mContext.getContentResolver().query(Notes.CONTENT_HISTORY_URI,
+                new String[] { HistoryColumns.CONTENT }, HistoryColumns.NOTE_ID + "=?",
+                new String[] { String.valueOf(mNoteId) },
+                HistoryColumns.SAVED_DATE + " DESC," + HistoryColumns.ID + " DESC");
+        String content = "";
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    content = cursor.getString(0);
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        return content == null ? "" : content;
     }
 
     /**

@@ -3,7 +3,7 @@
 <!-- Copyright (c) 2010-2011, The MiCode Open Source Community (www.micode.net)
 
      Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
+     You may not use this file except in compliance with the License.
      You may obtain a copy of the License at
 
           http://www.apache.org/licenses/LICENSE-2.0
@@ -17,4 +17,36 @@
 
 <resources>
     <color name="user_query_highlight">#335b5b5b</color>
+
+    <!-- ===== 本次维护新增：语义化配色令牌，供日间/夜间主题共享（夜间值见 values-night/colors.xml） ===== -->
+    <!-- 应用背景渐变 -->
+    <color name="app_bg_start">#EAF6F4</color>
+    <color name="app_bg_center">#F4F8FB</color>
+    <color name="app_bg_end">#F4F7FB</color>
+    <!-- 顶部标题栏与搜索栏 -->
+    <color name="top_bar_bg">#FFFFFF</color>
+    <color name="top_bar_divider">#E6EBF2</color>
+    <!-- 便签卡片底色（五种皮肤）与描边 -->
+    <color name="card_white">#FFFFFF</color>
+    <color name="card_yellow">#FFFCF2</color>
+    <color name="card_green">#F3FCF7</color>
+    <color name="card_red">#FFF6F6</color>
+    <color name="card_blue">#F2F9FF</color>
+    <color name="folder_card">#FFFFFF</color>
+    <color name="folder_stroke">#DCE8F4</color>
+    <color name="card_stroke">#E7ECF3</color>
+    <!-- 文字层级 -->
+    <color name="text_primary">#1F2A37</color>
+    <color name="text_secondary">#8A97A8</color>
+    <color name="text_title">#12263A</color>
+    <color name="text_hint">#98A3B3</color>
+    <color name="icon_more">#7A8899</color>
+    <color name="icon_title">#4A5A6A</color>
+    <!-- 标签小条 -->
+    <color name="tag_chip_bg">#E6F6F3</color>
+    <color name="tag_text">#17A79B</color>
+    <!-- 底部撤销提示条 -->
+    <color name="undo_bar_bg">#2C3A46</color>
+    <color name="undo_text">#FFFFFF</color>
+    <color name="undo_action">#6FE3D8</color>
 </resources>

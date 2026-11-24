@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次维护新增：搜索图标 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#1F2A37"
+        android:pathData="M10.5,3a7.5,7.5 0,1 0,0 15a7.5,7.5 0,0 0,0 -15zM10.5,5.2a5.3,5.3 0,1 1,0 10.6a5.3,5.3 0,0 1,0 -10.6z" />
+    <path
+        android:fillColor="#1F2A37"
+        android:pathData="M15.6,16.9l1.5,-1.5l5.1,5.1l-1.5,1.5z" />
+</vector>

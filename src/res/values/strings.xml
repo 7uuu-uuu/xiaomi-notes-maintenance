@@ -69,6 +69,26 @@
     <string name="menu_remove_remind">Delete reminder</string>
     <string name="menu_title_select_folder">Select folder</string>
     <string name="menu_move_parent_folder">Parent folder</string>
+    <!-- Trash and note history -->
+    <string name="menu_restore">Restore</string>
+    <string name="menu_delete_forever">Delete permanently</string>
+    <string name="menu_history">History versions</string>
+    <string name="trash_folder_name">Trash</string>
+    <!-- 本次美化新增：标题栏返回按钮与根目录标题 -->
+    <string name="menu_back">Back</string>
+    <string name="all_notes_name">All notes</string>
+    <string name="alert_message_restore_notes">Restore the selected %d notes?</string>
+    <string name="alert_message_delete_forever">Permanently delete the selected %d notes? This action cannot be undone.</string>
+    <string name="alert_message_delete_to_trash">The selected %d notes will be moved to trash</string>
+    <string name="info_note_moved_to_trash">Note moved to trash</string>
+    <string name="trash_retention_notice">Notes in trash are removed permanently after %d days</string>
+    <string name="trash_empty">Trash is empty</string>
+    <string name="trash_purged_format">%d expired notes were removed from trash</string>
+    <string name="history_dialog_title">History versions</string>
+    <string name="history_empty">No history version yet, the current content will be archived after the note is modified</string>
+    <string name="history_item_format">%1$s  %2$s</string>
+    <string name="history_restore_confirm">Replace the current content with this version?</string>
+    <string name="history_restored">History version restored</string>
     <string name="info_note_enter_desktop">Note added to home</string>
     <string name="alert_message_delete_folder">Confirm to delete folder and its notes?</string>
     <string name="alert_title_delete">Delete selected notes</string>
@@ -154,6 +174,8 @@
     <string name="button_delete">Delete</string>
     <string name="call_record_folder_name">Call notes</string>
     <string name="hint_foler_name">Input name</string>
+    <!-- 编辑页实时字数统计格式（本次维护新增） -->
+    <string name="word_count_format">%d chars</string>
 
     <string name="search_label">Searching Notes</string>
     <string name="search_hint">Search notes</string>
@@ -167,4 +189,44 @@
         <item quantity="other"><xliff:g id="number" example="15">%1$s</xliff:g> results for \"<xliff:g id="search" example="???">%2$s</xliff:g>\"</item>
     </plurals>
 
+    <!-- 本次维护新增：置顶、排序、标签与搜索相关文案 -->
+    <string name="menu_sort">Sort order</string>
+    <string name="sort_by_modified">Last modified</string>
+    <string name="sort_by_created">Date created</string>
+    <string name="sort_dialog_title">Sort notes by</string>
+    <string name="menu_pin">Pin to top</string>
+    <string name="menu_unpin">Unpin</string>
+    <string name="menu_tag">Tag</string>
+    <string name="menu_filter_tag">Filter by tag</string>
+    <string name="tag_dialog_title">Note tag</string>
+    <string name="tag_hint">Tag name, leave empty to clear</string>
+    <string name="tag_filter_title">All tags</string>
+    <string name="tag_filter_all">Show all notes</string>
+    <string name="tag_filter_empty">No tag added yet</string>
+    <string name="search_no_result">No matching notes</string>
+    <string name="tag_filter_no_result">No notes with this tag</string>
+    <string name="search_result_format">%1$s note(s) found</string>
+    <string name="search_clear">Clear</string>
+    <string name="menu_more">More</string>
+    <string name="swipe_pinned">Pinned</string>
+    <string name="menu_multi_select">Select</string>
+    <string name="undo_trash_tip">Moved to trash</string>
+    <string name="undo_action">Undo</string>
+    <string name="undo_restored">Note restored</string>
+    <string name="alert_message_swipe_delete">Move this note to trash?</string>
+    <string name="swipe_unpinned">Unpinned</string>
+
+    <string name="font_size_max">Largest text size</string>
+    <string name="font_size_min">Smallest text size</string>
+    <string name="menu_layout_mode">Toggle layout</string>
+
+    <!-- 本次维护新增：正文图片附件 -->
+    <string name="menu_insert_image">Insert image</string>
+    <string name="image_from_gallery">Choose from gallery</string>
+    <string name="image_take_photo">Take a photo</string>
+    <string name="image_pick_title">Choose image</string>
+    <string name="image_insert_failed">Failed to add the image</string>
+    <string name="image_no_camera">No camera app is available</string>
+    <string name="image_list_mode_unsupported">Images are not supported in checklist mode, please switch to plain text mode</string>
+    <string name="image_placeholder">[Image]</string>
 </resources>

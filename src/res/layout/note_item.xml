@@ -19,13 +19,17 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/note_item"
     android:layout_width="fill_parent"
-    android:layout_height="fill_parent">
+    android:layout_height="wrap_content">
 
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:paddingLeft="30dp"
+        android:paddingRight="30dp"
+        android:paddingTop="15dp"
+        android:paddingBottom="15dp">
 
         <LinearLayout
             android:layout_width="0dip"
@@ -36,7 +40,7 @@
             <TextView
                 android:id="@+id/tv_name"
                 android:layout_width="wrap_content"
-                android:layout_height="0dip"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textAppearance="@style/TextAppearancePrimaryItem"
                 android:visibility="gone" />
@@ -44,35 +48,85 @@
             <LinearLayout
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical">
+                android:layout_gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!-- 本次维护新增：置顶标记，仅在便签置顶时显示 -->
+                <ImageView
+                    android:id="@+id/iv_pinned"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginRight="6dp"
+                    android:layout_gravity="center_vertical"
+                    android:src="@drawable/ic_pin"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tv_title"
                     android:layout_width="0dip"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:singleLine="true" />
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
+
+                <!-- 本次美化调整：图标移入横向排布，避免与右侧时间文本重叠 -->
+                <ImageView
+                    android:id="@+id/iv_alert_icon"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginLeft="8dp"
+                    android:layout_gravity="center_vertical"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tv_time"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginLeft="8dp"
+                    android:layout_gravity="center_vertical"
                     android:textAppearance="@style/TextAppearanceSecondaryItem" />
+
+                <!-- 本次维护新增：单条便签的行内“更多操作”入口，点击弹出置顶/标签/多选/删除菜单 -->
+                <TextView
+                    android:id="@+id/btn_item_menu"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginLeft="4dp"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center"
+                    android:text="⋮"
+                    android:textColor="@color/icon_more"
+                    android:textSize="18sp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/menu_more" />
             </LinearLayout>
+
+            <!-- 本次维护新增：标签小条，未打标签时隐藏 -->
+            <TextView
+                android:id="@+id/tv_tag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_tag_chip"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="@color/tag_text"
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <CheckBox
             android:id="@android:id/checkbox"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginLeft="8dp"
             android:focusable="false"
             android:clickable="false"
             android:visibility="gone" />
     </LinearLayout>
-
-    <ImageView
-        android:id="@+id/iv_alert_icon"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|right"/>
 </FrameLayout>

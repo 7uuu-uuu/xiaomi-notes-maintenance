@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本次维护新增：正文插入图片的来源选择菜单 -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/item_pick_gallery"
+        android:title="@string/image_from_gallery" />
+    <item
+        android:id="@+id/item_take_photo"
+        android:title="@string/image_take_photo" />
+</menu>

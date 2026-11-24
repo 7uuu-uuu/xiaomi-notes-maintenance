@@ -94,6 +94,19 @@ public class Notes {
     public static final Uri CONTENT_DATA_URI = Uri.parse("content://" + AUTHORITY + "/data");
 
     /**
+     * Uri of the note history table, used to query and insert history versions
+     */
+    // 查询与写入便签历史版本表（note_history）的内容 URI
+    public static final Uri CONTENT_HISTORY_URI = Uri.parse("content://" + AUTHORITY + "/history");
+
+    /**
+     * Uri of the note text search, used by the note list to search both the snippet and the body
+     */
+    // 本次维护新增：便签全文搜索 URI，查询参数 pattern 为关键词，可同时匹配摘要与正文
+    public static final Uri CONTENT_TEXT_SEARCH_URI = Uri.parse("content://" + AUTHORITY
+            + "/search_text");
+
+    /**
      * note 数据库表的列名定义接口。
      * 存储便签、用户文件夹及系统文件夹的元数据属性与云同步状态字段。
      */
@@ -218,6 +231,69 @@ public class Notes {
          */
         // 便签记录乐观版本号，每次更新时自动递增 1
         public static final String VERSION = "version";
+
+        /**
+         * The date when note was moved into trash folder
+         * <P> Type : INTEGER (long) </P>
+         */
+        // 便签被移入回收站的时间戳（单位：毫秒），0 表示当前不在回收站中。
+        // 由数据库触发器在 parent_id 进出回收站时自动写入与清零，用于计算保留天数并支持过期清理
+        public static final String DELETED_DATE = "deleted_date";
+
+        /**
+         * Whether the note is pinned to the top of the list
+         * <P> Type : INTEGER (0/1) </P>
+         */
+        // 本次维护新增：置顶标记，1 表示置顶（列表排序时排在最前），0 表示普通便签
+        public static final String PINNED = "pinned";
+
+        /**
+         * The tag of the note
+         * <P> Type : TEXT </P>
+         */
+        // 本次维护新增：便签标签，空串表示未打标签；标签用于列表筛选
+        public static final String TAG_LABEL = "tag";
+    }
+
+    /**
+     * 便签历史版本表（note_history）的列名定义接口。
+     * 每次便签正文被覆盖前，先把旧正文写入本表，形成可按时间回溯的版本链。
+     */
+    public interface HistoryColumns {
+        /**
+         * The unique ID for a row
+         * <P> Type: INTEGER (long) </P>
+         */
+        // 历史记录唯一主键 ID
+        public static final String ID = "_id";
+
+        /**
+         * The note id that this history record belongs to
+         * <P> Type: INTEGER (long) </P>
+         */
+        // 外键引用：该历史版本所属便签在 note 表中的主键 ID
+        public static final String NOTE_ID = "note_id";
+
+        /**
+         * The snapshot content of the note
+         * <P> Type: TEXT </P>
+         */
+        // 该版本便签正文的完整快照
+        public static final String CONTENT = "content";
+
+        /**
+         * The short snippet shown in history list
+         * <P> Type: TEXT </P>
+         */
+        // 该版本正文的单行摘要，仅用于历史列表展示
+        public static final String SNIPPET = "snippet";
+
+        /**
+         * The date when this version was saved
+         * <P> Type: INTEGER (long) </P>
+         */
+        // 该版本被归档的时间戳（单位：毫秒）
+        public static final String SAVED_DATE = "saved_date";
 
         /**
          * Whether the note is pinned to the top of the list.
